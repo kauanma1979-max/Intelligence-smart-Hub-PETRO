@@ -1,0 +1,6 @@
+{
+  "name": "Central de Inteligência de Provas",
+  "description": "Plataforma analítica e banco de dados rastreável de questões de concursos (Petrobras, Transpetro e ANSA) com análise Pareto 80/20, mapa de incidência do edital e localizador inteligente.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
