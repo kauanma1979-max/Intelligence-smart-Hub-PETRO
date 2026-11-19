@@ -6,6 +6,10 @@ import type {
   QuestionRecord,
 } from '../types/exam';
 import { buildAdherenceAudit } from '../utils/examIntelligence';
+import {
+  CoverageDonutChart,
+  HorizontalFrequencyBarChart,
+} from './DataVizCharts';
 
 interface AdherenceAuditViewProps {
   questions: QuestionRecord[];
@@ -75,6 +79,32 @@ export const AdherenceAuditView: React.FC<AdherenceAuditViewProps> = ({
     [auditRows]
   );
 
+  const examAttentionBars = useMemo(() => {
+    const map = new Map<string, { total: number; attention: number }>();
+    for (const row of auditRows) {
+      const ex = row.question.concursoCurto;
+      const cur = map.get(ex) || { total: 0, attention: 0 };
+      cur.total++;
+      if (row.categoria !== 'direta') cur.attention++;
+      map.set(ex, cur);
+    }
+    return Array.from(map.entries())
+      .map(([exam, stats]) => ({
+        id: exam,
+        label: exam,
+        sublabel: `${stats.attention} correlata(s)/revisão de ${stats.total} questões`,
+        value: stats.attention,
+        pct: stats.total > 0 ? (stats.attention / stats.total) * 100 : 0,
+        color:
+          examFilter === exam
+            ? '#4338CA'
+            : stats.attention > 0
+              ? '#D97706'
+              : '#059669',
+      }))
+      .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+  }, [auditRows, examFilter]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return auditRows.filter((row) => {
@@ -129,6 +159,66 @@ export const AdherenceAuditView: React.FC<AdherenceAuditViewProps> = ({
             </button>
           );
         })}
+      </div>
+
+      {/* 2-Column BI Charts: Adherence Distribution + Exam Attention Concentration */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <div className="lg:col-span-5">
+          <CoverageDonutChart
+            title="Proporção de Aderência ao Edital"
+            subtitle="Clique em uma categoria para filtrar a tabela de auditoria."
+            centerValue={String(auditRows.length)}
+            centerLabel="questões"
+            activeSegmentId={categoryFilter === 'all' ? null : categoryFilter}
+            onSelectSegment={(id) =>
+              setCategoryFilter(
+                categoryFilter === id ? 'all' : (id as AdherenceCategory)
+              )
+            }
+            segments={[
+              {
+                id: 'direta',
+                label: 'Cobrança direta',
+                value: counts.direta,
+                color: '#059669',
+                icon: 'cobrado',
+              },
+              {
+                id: 'correlata',
+                label: 'Cobrança correlata',
+                value: counts.correlata,
+                color: '#D97706',
+                icon: 'aprofundamento',
+              },
+              {
+                id: 'revisao',
+                label: 'Necessidade de revisão',
+                value: counts.revisao,
+                color: '#4338CA',
+                icon: 'parcial',
+              },
+              {
+                id: 'sem_correspondencia',
+                label: 'Sem correspondência',
+                value: counts.sem_correspondencia,
+                color: '#DC2626',
+                icon: 'nao_identificado',
+              },
+            ]}
+          />
+        </div>
+
+        <div className="lg:col-span-7">
+          <HorizontalFrequencyBarChart
+            title="Incidência de Itens Correlatos ou em Revisão por Prova"
+            subtitle="Clique em uma prova para filtrar os casos não diretos."
+            items={examAttentionBars}
+            maxItems={8}
+            onSelectBar={(item) =>
+              setExamFilter((prev) => (prev === item.id ? 'Todas' : item.id))
+            }
+          />
+        </div>
       </div>
 
       {/* Filters */}

@@ -2,6 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { PresenceScope, QuestionRecord } from '../types/exam';
 import { buildCommonAndExclusiveMatrix } from '../utils/examIntelligence';
+import {
+  CoverageDonutChart,
+  HorizontalFrequencyBarChart,
+} from './DataVizCharts';
 
 interface CommonExclusiveViewProps {
   questions: QuestionRecord[];
@@ -108,19 +112,19 @@ export const CommonExclusiveView: React.FC<CommonExclusiveViewProps> = ({
         <button
           type="button"
           onClick={() => setScopeFilter(scopeFilter === 'todos' ? 'all' : 'todos')}
-          className={`rounded-lg border p-4 text-left transition-colors ${
+          className={`ui-card p-4 text-left transition-colors ${
             scopeFilter === 'todos'
-              ? 'border-blue-600 bg-blue-50/40'
-              : 'border-slate-200 bg-white hover:bg-slate-50'
+              ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)]/50'
+              : 'hover:bg-[var(--bg-surface-hover)]'
           }`}
         >
-          <div className="text-xs font-medium text-slate-500">
+          <div className="text-xs font-medium text-[var(--text-muted)]">
             1. Presentes em todos ({columns.length}/{columns.length})
           </div>
-          <div className="mt-1 font-mono text-2xl font-bold text-emerald-700 tabular-nums">
+          <div className="mt-1 font-mono text-2xl font-bold text-[var(--status-success)] tabular-nums">
             {counts.todos}
           </div>
-          <div className="mt-1 text-[11px] text-slate-500">
+          <div className="mt-1 text-[11px] text-[var(--text-muted)]">
             Núcleo obrigatório entre todos os concursos analisados
           </div>
         </button>
@@ -128,19 +132,19 @@ export const CommonExclusiveView: React.FC<CommonExclusiveViewProps> = ({
         <button
           type="button"
           onClick={() => setScopeFilter(scopeFilter === 'varios' ? 'all' : 'varios')}
-          className={`rounded-lg border p-4 text-left transition-colors ${
+          className={`ui-card p-4 text-left transition-colors ${
             scopeFilter === 'varios'
-              ? 'border-blue-600 bg-blue-50/40'
-              : 'border-slate-200 bg-white hover:bg-slate-50'
+              ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)]/50'
+              : 'hover:bg-[var(--bg-surface-hover)]'
           }`}
         >
-          <div className="text-xs font-medium text-slate-500">
+          <div className="text-xs font-medium text-[var(--text-muted)]">
             2. Presentes em vários concursos
           </div>
-          <div className="mt-1 font-mono text-2xl font-bold text-blue-700 tabular-nums">
+          <div className="mt-1 font-mono text-2xl font-bold text-[var(--brand-primary)] tabular-nums">
             {counts.varios}
           </div>
-          <div className="mt-1 text-[11px] text-slate-500">
+          <div className="mt-1 text-[11px] text-[var(--text-muted)]">
             Recorrentes em mais de um edital ou banca
           </div>
         </button>
@@ -150,22 +154,89 @@ export const CommonExclusiveView: React.FC<CommonExclusiveViewProps> = ({
           onClick={() =>
             setScopeFilter(scopeFilter === 'exclusivo' ? 'all' : 'exclusivo')
           }
-          className={`rounded-lg border p-4 text-left transition-colors ${
+          className={`ui-card p-4 text-left transition-colors ${
             scopeFilter === 'exclusivo'
-              ? 'border-blue-600 bg-blue-50/40'
-              : 'border-slate-200 bg-white hover:bg-slate-50'
+              ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)]/50'
+              : 'hover:bg-[var(--bg-surface-hover)]'
           }`}
         >
-          <div className="text-xs font-medium text-slate-500">
+          <div className="text-xs font-medium text-[var(--text-muted)]">
             3. Exclusivos de um concurso
           </div>
-          <div className="mt-1 font-mono text-2xl font-bold text-amber-700 tabular-nums">
+          <div className="mt-1 font-mono text-2xl font-bold text-[var(--status-warning)] tabular-nums">
             {counts.exclusivo}
           </div>
-          <div className="mt-1 text-[11px] text-slate-500">
+          <div className="mt-1 text-[11px] text-[var(--text-muted)]">
             Identificados em apenas uma empresa ou prova específica
           </div>
         </button>
+      </div>
+
+      {/* Visual Analytics Strip */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        <div className="xl:col-span-5">
+          <CoverageDonutChart
+            title="Proporção de Transversalidade"
+            subtitle="Clique em um grupo para filtrar a matriz de interseção."
+            centerValue={`${counts.total}`}
+            centerLabel="temas"
+            activeSegmentId={scopeFilter === 'all' ? null : scopeFilter}
+            onSelectSegment={(segId) => {
+              const s = segId as PresenceScope;
+              setScopeFilter(scopeFilter === s ? 'all' : s);
+            }}
+            segments={[
+              {
+                id: 'todos',
+                label: 'Comum a todos',
+                value: counts.todos,
+                color: '#059669',
+                icon: 'cobrado',
+              },
+              {
+                id: 'varios',
+                label: 'Presente em vários',
+                value: counts.varios,
+                color: '#2563EB',
+                icon: 'parcial',
+              },
+              {
+                id: 'exclusivo',
+                label: 'Exclusivo de 1 escopo',
+                value: counts.exclusivo,
+                color: '#D97706',
+                icon: 'aprofundamento',
+              },
+            ]}
+          />
+        </div>
+
+        <div className="xl:col-span-7">
+          <HorizontalFrequencyBarChart
+            title="Temas de Maior Recorrência no Recorte Atual"
+            subtitle="Clique em uma barra para consultar todas as questões desse tema."
+            maxItems={7}
+            items={filteredRows
+              .slice()
+              .sort((a, b) => b.totalQuestoes - a.totalQuestoes)
+              .map((r) => ({
+                id: r.tema,
+                label: r.tema,
+                sublabel: `${r.provasPresentes.length} prova(s): ${r.provasPresentes.join(' · ')}`,
+                value: r.totalQuestoes,
+                questions: r.questoes,
+              }))}
+            onSelectBar={(item) => {
+              if (item.questions && item.questions.length > 0) {
+                onInspectQuestions(
+                  item.label,
+                  `${item.questions.length} questão(ões) encontradas`,
+                  item.questions
+                );
+              }
+            }}
+          />
+        </div>
       </div>
 
       {/* Controls */}

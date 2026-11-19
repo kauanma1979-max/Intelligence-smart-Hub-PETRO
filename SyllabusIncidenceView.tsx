@@ -1,7 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { QuestionRecord, SyllabusIncidenceRow } from '../types/exam';
-import { buildSyllabusIncidenceMap } from '../utils/examIntelligence';
+import {
+  buildSyllabusIncidenceMap,
+  buildTopicExamHeatmap,
+} from '../utils/examIntelligence';
+import {
+  HeatmapMatrixChart,
+  HorizontalFrequencyBarChart,
+} from './DataVizCharts';
 
 interface SyllabusIncidenceViewProps {
   questions: QuestionRecord[];
@@ -15,6 +22,7 @@ export const SyllabusIncidenceView: React.FC<SyllabusIncidenceViewProps> = ({
   const [mode, setMode] = useState<'unificado' | 'codigo'>('unificado');
   const [search, setSearch] = useState('');
   const [selectedExam, setSelectedExam] = useState('Todas');
+  const [chartTab, setChartTab] = useState<'barras' | 'heatmap'>('barras');
 
   const exams = useMemo(
     () => Array.from(new Set(questions.map((q) => q.prova))).sort(),
@@ -37,6 +45,11 @@ export const SyllabusIncidenceView: React.FC<SyllabusIncidenceViewProps> = ({
         r.provasPresentes.some((p) => p.toLowerCase().includes(s))
     );
   }, [scopedQuestions, mode, search]);
+
+  const heatmapData = useMemo(
+    () => buildTopicExamHeatmap(scopedQuestions, 'edital', 10),
+    [scopedQuestions]
+  );
 
   return (
     <div className="space-y-5">
@@ -112,6 +125,80 @@ export const SyllabusIncidenceView: React.FC<SyllabusIncidenceViewProps> = ({
         <span className="font-mono text-xs font-medium text-[var(--text-muted)] tabular-nums">
           {rows.length} registros no edital
         </span>
+      </div>
+
+      {/* Interactive BI Chart Section */}
+      <div className="space-y-3">
+        <div
+          role="tablist"
+          aria-label="Visualização do mapa do edital"
+          className="inline-flex rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={chartTab === 'barras'}
+            onClick={() => setChartTab('barras')}
+            className={`min-h-[34px] rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+              chartTab === 'barras'
+                ? 'bg-[var(--brand-secondary)] text-white'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]'
+            }`}
+          >
+            Top 10 Conteúdos (Barras)
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={chartTab === 'heatmap'}
+            onClick={() => setChartTab('heatmap')}
+            className={`min-h-[34px] rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+              chartTab === 'heatmap'
+                ? 'bg-[var(--brand-secondary)] text-white'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]'
+            }`}
+          >
+            Mapa de Calor (Provas)
+          </button>
+        </div>
+
+        {chartTab === 'barras' ? (
+          <HorizontalFrequencyBarChart
+            title="Top 10 Tópicos e Códigos do Edital por Incidência"
+            subtitle="Clique em qualquer barra para abrir todas as questões associadas ao conteúdo."
+            maxItems={10}
+            items={rows.map((r) => ({
+              id: r.id,
+              label: r.titulo,
+              sublabel: `Códigos: ${r.codigosRelacionados.slice(0, 4).join(', ')} · Direto: ${r.vinculoDiretoCount} / Correlato: ${r.vinculoCorrelatoCount}`,
+              value: r.questoesCount,
+              pct: scopedQuestions.length > 0 ? (r.questoesCount / scopedQuestions.length) * 100 : 0,
+              questions: r.questoes,
+            }))}
+            onSelectBar={(item) => {
+              if (item.questions && item.questions.length > 0) {
+                onInspectTopic(
+                  item.label,
+                  `${item.questions.length} questão(ões) associadas a este item do edital`,
+                  item.questions
+                );
+              }
+            }}
+          />
+        ) : (
+          <HeatmapMatrixChart
+            title="Mapa de Calor — Conteúdos do Edital × Provas"
+            subtitle="Clique em qualquer célula para inspecionar as questões daquela prova."
+            data={heatmapData}
+            onSelectCell={(topic, exam, list) =>
+              onInspectTopic(
+                `${topic} — ${exam}`,
+                `${list.length} questão(ões) nesta prova`,
+                list
+              )
+            }
+          />
+        )}
       </div>
 
       {/* Incidence Table */}

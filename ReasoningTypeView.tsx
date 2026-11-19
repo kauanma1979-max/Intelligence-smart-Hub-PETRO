@@ -6,6 +6,7 @@ import {
   classifyReasoningType,
   REASONING_DEFINITIONS,
 } from '../utils/examIntelligence';
+import { GroupedComparisonBarChart } from './DataVizCharts';
 
 interface ReasoningTypeViewProps {
   questions: QuestionRecord[];
@@ -136,6 +137,40 @@ export const ReasoningTypeView: React.FC<ReasoningTypeViewProps> = ({
           );
         })}
       </div>
+
+      {/* Grouped Comparison: CESGRANRIO vs CEBRASPE by Reasoning Type */}
+      <GroupedComparisonBarChart
+        title="Perfil Cognitivo Comparado: CESGRANRIO × CEBRASPE"
+        subtitle="Distribuição das 7 exigências de raciocínio entre as bancas (clique em uma barra para abrir as questões correspondentes)."
+        series={[
+          { key: 'cesgranrio', label: 'CESGRANRIO', color: '#2563EB' },
+          { key: 'cebraspe', label: 'CEBRASPE', color: '#14213D' },
+        ]}
+        categories={breakdown.map((row) => ({
+          id: row.tipo,
+          label: row.label,
+          values: {
+            cesgranrio: row.cesgranrioCount,
+            cebraspe: row.cebraspeCount,
+          },
+        }))}
+        unitSuffix="q"
+        onSelectCell={(cat, seriesKey, seriesLabel) => {
+          const row = breakdown.find((r) => r.tipo === cat.id);
+          if (!row) return;
+          const boardKey = seriesKey === 'cesgranrio' ? 'CESGRANRIO' : 'CEBRASPE';
+          const list = row.questoes.filter((q) =>
+            q.banca.toUpperCase().includes(boardKey)
+          );
+          if (list.length > 0) {
+            onInspectQuestions(
+              `Raciocínio: ${row.label} (${seriesLabel})`,
+              `${list.length} questões identificadas para esta banca`,
+              list
+            );
+          }
+        }}
+      />
 
       {/* Filter Bar */}
       <div className="ui-card flex flex-wrap items-center justify-between gap-3 p-3.5">

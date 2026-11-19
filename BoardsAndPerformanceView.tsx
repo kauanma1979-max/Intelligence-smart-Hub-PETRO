@@ -2,6 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { FileText, Upload } from 'lucide-react';
 import type { QuestionPerformance, QuestionRecord } from '../types/exam';
 import { buildBoardComparison } from '../utils/examIntelligence';
+import {
+  CoverageDonutChart,
+  GroupedComparisonBarChart,
+} from './DataVizCharts';
 
 interface BoardsAndPerformanceViewProps {
   questions: QuestionRecord[];
@@ -214,6 +218,39 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
             </section>
           </div>
 
+          {/* Grouped Bar Chart: CESGRANRIO vs CEBRASPE */}
+          <GroupedComparisonBarChart
+            title="Comparação Visual por Disciplina e Critério (% da Banca)"
+            subtitle="Clique em qualquer barra para abrir as questões correspondentes de CESGRANRIO ou CEBRASPE."
+            series={[
+              { key: 'cesgranrio', label: 'CESGRANRIO (%)', color: '#2563EB' },
+              { key: 'cebraspe', label: 'CEBRASPE (%)', color: '#14213D' },
+            ]}
+            categories={comparison.criterios.map((c) => ({
+              id: c.criterio,
+              label: c.criterio,
+              values: {
+                cesgranrio: Number(c.cesgranrioPct.toFixed(1)),
+                cebraspe: Number(c.cebraspePct.toFixed(1)),
+              },
+              questionsBySeries: {
+                cesgranrio: c.cesgranrioQuestions,
+                cebraspe: c.cebraspeQuestions,
+              },
+            }))}
+            unitSuffix="%"
+            onSelectCell={(cat, seriesKey, seriesLabel) => {
+              const list = cat.questionsBySeries?.[seriesKey] || [];
+              if (list.length > 0) {
+                onInspectQuestions(
+                  `${seriesLabel.replace(' (%)', '')} — ${cat.label}`,
+                  `${list.length} questão(ões) neste critério`,
+                  list
+                );
+              }
+            }}
+          />
+
           {/* Direct Comparison Matrix */}
           <section className="ui-card overflow-hidden">
             <div className="border-b border-[var(--border-subtle)] px-5 py-4">
@@ -323,20 +360,20 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
           </section>
 
           {/* Cognitive Profile & Question Patterns */}
-          <section className="rounded-lg border border-slate-200 bg-white p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
+          <section className="ui-card p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">
+                <h2 className="ui-section-title">
                   Padrões de Cobrança: Conceitual, Cálculos e Interpretação Técnica
                 </h2>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
                   Classificação automática extraída da coluna &ldquo;O que a questão exigiu&rdquo;. Para inspeção integral de enunciados e alternativas, anexe os PDFs originais na aba ao lado.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setTab('pdfs')}
-                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 whitespace-nowrap"
+                className="ui-btn-secondary !min-h-[34px] !text-[var(--brand-primary)]"
               >
                 <FileText className="h-3.5 w-3.5" />
                 Consultar PDFs originais
@@ -347,7 +384,7 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
               {comparison.padroes.map((p) => (
                 <div key={p.padrao} className="space-y-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="font-semibold text-slate-800">{p.label}</span>
+                    <span className="font-semibold text-[var(--text-primary)]">{p.label}</span>
                     <div className="flex items-center gap-3 font-mono text-[11px] tabular-nums">
                       <button
                         type="button"
@@ -358,11 +395,11 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
                             p.cesgranrioQuestions
                           )
                         }
-                        className="text-blue-700 hover:underline"
+                        className="font-semibold text-[var(--brand-primary)] hover:underline"
                       >
                         CESGRANRIO: {p.cesgranrioCount} ({p.cesgranrioPct.toFixed(1)}%)
                       </button>
-                      <span aria-hidden="true" className="text-slate-300">
+                      <span aria-hidden="true" className="text-[var(--border-strong)]">
                         ·
                       </span>
                       <button
@@ -374,22 +411,22 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
                             p.cebraspeQuestions
                           )
                         }
-                        className="text-slate-800 hover:underline"
+                        className="font-semibold text-[var(--brand-secondary)] hover:underline"
                       >
                         CEBRASPE: {p.cebraspeCount} ({p.cebraspePct.toFixed(1)}%)
                       </button>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <div className="h-2.5 overflow-hidden rounded-xs bg-slate-100">
+                    <div className="h-2.5 overflow-hidden rounded-xs bg-[var(--bg-surface-subtle)]">
                       <div
-                        className="h-full bg-blue-700"
+                        className="h-full bg-[#2563EB]"
                         style={{ width: `${p.cesgranrioPct}%` }}
                       />
                     </div>
-                    <div className="h-2.5 overflow-hidden rounded-xs bg-slate-100">
+                    <div className="h-2.5 overflow-hidden rounded-xs bg-[var(--bg-surface-subtle)]">
                       <div
-                        className="h-full bg-slate-700"
+                        className="h-full bg-[#14213D]"
                         style={{ width: `${p.cebraspePct}%` }}
                       />
                     </div>
@@ -524,71 +561,85 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
       {tab === 'desempenho' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="text-xs text-slate-500">Acertos</div>
-              <div className="mt-1 font-mono text-2xl font-bold text-emerald-700 tabular-nums">
+            <div className="ui-card p-4">
+              <div className="text-xs text-[var(--text-muted)]">Acertos</div>
+              <div className="mt-1 font-mono text-2xl font-bold text-[var(--status-success)] tabular-nums">
                 {perfStats.acerto}
               </div>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="text-xs text-slate-500">Erros</div>
-              <div className="mt-1 font-mono text-2xl font-bold text-red-700 tabular-nums">
+            <div className="ui-card p-4">
+              <div className="text-xs text-[var(--text-muted)]">Erros</div>
+              <div className="mt-1 font-mono text-2xl font-bold text-[var(--status-error)] tabular-nums">
                 {perfStats.erro}
               </div>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="text-xs text-slate-500">Para revisão</div>
-              <div className="mt-1 font-mono text-2xl font-bold text-amber-700 tabular-nums">
+            <div className="ui-card p-4">
+              <div className="text-xs text-[var(--text-muted)]">Para revisão</div>
+              <div className="mt-1 font-mono text-2xl font-bold text-[var(--status-warning)] tabular-nums">
                 {perfStats.revisar}
               </div>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="text-xs text-slate-500">Pendentes</div>
-              <div className="mt-1 font-mono text-2xl font-bold text-slate-700 tabular-nums">
+            <div className="ui-card p-4">
+              <div className="text-xs text-[var(--text-muted)]">Pendentes</div>
+              <div className="mt-1 font-mono text-2xl font-bold text-[var(--text-secondary)] tabular-nums">
                 {perfStats.pendente}
               </div>
             </div>
           </div>
 
-          <section className="rounded-lg border border-slate-200 bg-white">
-            <div className="border-b border-slate-200 px-5 py-3.5">
-              <h2 className="text-sm font-semibold text-slate-900">
+          {perfStats.tracked.length > 0 && (
+            <CoverageDonutChart
+              title="Resumo Visual das Questões Marcadas"
+              subtitle="Distribuição das marcações registradas durante a inspeção de questões."
+              centerValue={`${perfStats.tracked.length}`}
+              centerLabel="registradas"
+              segments={[
+                { id: 'acerto', label: 'Acertos', value: perfStats.acerto, color: '#059669', icon: 'cobrado' },
+                { id: 'erro', label: 'Erros', value: perfStats.erro, color: '#DC2626', icon: 'nao_identificado' },
+                { id: 'revisar', label: 'Para revisão', value: perfStats.revisar, color: '#D97706', icon: 'aprofundamento' },
+              ]}
+            />
+          )}
+
+          <section className="ui-card overflow-hidden">
+            <div className="border-b border-[var(--border-subtle)] px-5 py-3.5">
+              <h2 className="ui-section-title">
                 Caderno de Questões Registradas
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[var(--text-muted)]">
                 Questões que você marcou como Acertei, Errei ou Revisar ao inspecionar dossiês.
               </p>
             </div>
             {perfStats.tracked.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-500">
+              <div className="p-8 text-center text-xs text-[var(--text-muted)]">
                 Nenhuma questão registrada ainda. Abra qualquer questão no Localizador ou nos gráficos e marque seu status de estudo.
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-[var(--border-subtle)]">
                 {perfStats.tracked.map((q) => {
                   const p = performanceMap[q.id];
                   return (
                     <div
                       key={q.id}
-                      className="flex flex-wrap items-center justify-between gap-3 p-4 hover:bg-slate-50"
+                      className="flex flex-wrap items-center justify-between gap-3 p-4 transition-colors hover:bg-[var(--bg-surface-hover)]"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          <span className="font-semibold text-slate-900">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+                          <span className="font-semibold text-[var(--text-primary)]">
                             {q.concursoCurto}
                           </span>
                           <span aria-hidden="true">·</span>
-                          <span className="font-mono text-blue-700 tabular-nums">
+                          <span className="font-mono text-[var(--brand-primary)] tabular-nums">
                             Questão {q.questao} — Pág. {q.paginaPdf}
                           </span>
                           <span aria-hidden="true">·</span>
                           <span
                             className={`font-semibold ${
                               p.status === 'acerto'
-                                ? 'text-emerald-700'
+                                ? 'text-[var(--status-success)]'
                                 : p.status === 'erro'
-                                  ? 'text-red-700'
-                                  : 'text-amber-700'
+                                  ? 'text-[var(--status-error)]'
+                                  : 'text-[var(--status-warning)]'
                             }`}
                           >
                             {p.status === 'acerto'
@@ -606,11 +657,11 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
                             </>
                           )}
                         </div>
-                        <div className="mt-1 text-sm font-medium text-slate-900">
+                        <div className="mt-1 text-sm font-medium text-[var(--text-primary)]">
                           {q.tema}
                         </div>
                         {p.notes && (
-                          <div className="mt-1 text-xs text-slate-600">
+                          <div className="mt-1 text-xs text-[var(--text-secondary)]">
                             Anotação: {p.notes}
                           </div>
                         )}
@@ -618,7 +669,7 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
                       <button
                         type="button"
                         onClick={() => onSelectQuestion(q, perfStats.tracked)}
-                        className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50 whitespace-nowrap"
+                        className="ui-btn-secondary !min-h-[34px]"
                       >
                         Editar registro
                       </button>

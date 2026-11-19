@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import type { ExamSummary, ParetoRow, QuestionRecord } from '../types/exam';
 import { calculatePareto } from '../utils/examIntelligence';
+import { GroupedComparisonBarChart } from './DataVizCharts';
 import { ParetoChart } from './ParetoChart';
 
 interface ExamParetoViewProps {
@@ -143,6 +144,39 @@ export const ExamParetoView: React.FC<ExamParetoViewProps> = ({
             row.questoes
           )
         }
+      />
+
+      {/* Exam Weight vs Global Historical Average Chart */}
+      <GroupedComparisonBarChart
+        title={`Comparativo: ${examSummary?.concursoCurto || activeProva} × Média Histórica Geral (%)`}
+        subtitle="Contrasta a concentração percentual da prova selecionada com o comportamento histórico consolidado."
+        series={[
+          { key: 'prova', label: 'Nesta prova (%)', color: '#2563EB' },
+          { key: 'media', label: 'Média histórica (%)', color: '#14213D' },
+        ]}
+        categories={examPareto.slice(0, 8).map((row) => ({
+          id: row.grupo,
+          label: row.grupo,
+          values: {
+            prova: Number(row.percentual.toFixed(1)),
+            media: Number((globalPctByGroup.get(row.grupo) ?? 0).toFixed(1)),
+          },
+          questionsBySeries: {
+            prova: row.questoes,
+            media: globalPareto.find((g) => g.grupo === row.grupo)?.questoes || row.questoes,
+          },
+        }))}
+        unitSuffix="%"
+        onSelectCell={(cat, seriesKey, seriesLabel) => {
+          const list = cat.questionsBySeries?.[seriesKey] || [];
+          if (list.length > 0) {
+            onInspectQuestions(
+              `${cat.label} · ${seriesLabel}`,
+              `${list.length} questão(ões) no recorte`,
+              list
+            );
+          }
+        }}
       />
 
       {/* Individual Breakdown with Delta vs General Average */}

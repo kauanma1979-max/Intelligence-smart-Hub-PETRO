@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import type { QuestionRecord } from '../types/exam';
 import { buildSubjectDepthAnalysis } from '../utils/examIntelligence';
+import { GroupedComparisonBarChart } from './DataVizCharts';
 
 interface SubjectDepthViewProps {
   questions: QuestionRecord[];
@@ -61,6 +62,25 @@ export const SubjectDepthView: React.FC<SubjectDepthViewProps> = ({
 
   const pct = (n: number) =>
     depthData.total > 0 ? ((n / depthData.total) * 100).toFixed(1) : '0.0';
+
+  const depthComparisonCategories = useMemo(
+    () =>
+      depthData.rows.slice(0, 7).map((row) => ({
+        id: row.subtema,
+        label: row.subtema,
+        values: {
+          basico: row.basicoCount,
+          aplicacao: row.aplicacaoCount,
+          calculoEstrutura: row.calculoEstruturaCount,
+        },
+        questionsBySeries: {
+          basico: row.questoes,
+          aplicacao: row.questoes,
+          calculoEstrutura: row.questoes,
+        },
+      })),
+    [depthData]
+  );
 
   return (
     <div className="space-y-5">
@@ -205,6 +225,29 @@ export const SubjectDepthView: React.FC<SubjectDepthViewProps> = ({
         </div>
       </div>
 
+      {/* Grouped Depth Comparison Chart */}
+      <GroupedComparisonBarChart
+        title="Perfil de Profundidade nos Principais Subtópicos"
+        subtitle="Comparativo entre cobrança básica, aplicação e cálculo/estrutura nos 7 subtópicos mais frequentes do recorte."
+        series={[
+          { key: 'basico', label: 'Básico', color: '#059669' },
+          { key: 'aplicacao', label: 'Aplicação', color: '#2563EB' },
+          { key: 'calculoEstrutura', label: 'Cálculo / Estrutura', color: '#D97706' },
+        ]}
+        categories={depthComparisonCategories}
+        unitSuffix="q"
+        onSelectCell={(cat, _seriesKey, seriesLabel) => {
+          const matchedRow = depthData.rows.find((r) => r.subtema === cat.id);
+          if (matchedRow) {
+            onInspectQuestions(
+              `Profundidade — ${matchedRow.subtema} (${seriesLabel})`,
+              `${matchedRow.total} questões no subtópico (${matchedRow.basicoCount} básico · ${matchedRow.aplicacaoCount} aplicação · ${matchedRow.calculoEstruturaCount} cálculo/estrutura)`,
+              matchedRow.questoes
+            );
+          }
+        }}
+      />
+
       {/* Subtopic Breakdown Table */}
       <section className="ui-card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-5 py-3.5">
@@ -218,15 +261,15 @@ export const SubjectDepthView: React.FC<SubjectDepthViewProps> = ({
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--text-secondary)]">
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-xs bg-[#15803D]" />
+              <span className="h-2.5 w-2.5 rounded-xs bg-[#059669]" />
               Básico
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-xs bg-[#1B4FD8]" />
+              <span className="h-2.5 w-2.5 rounded-xs bg-[#2563EB]" />
               Aplicação
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-xs bg-[#B45309]" />
+              <span className="h-2.5 w-2.5 rounded-xs bg-[#D97706]" />
               Cálculo / Estrutura
             </span>
           </div>
@@ -308,21 +351,21 @@ export const SubjectDepthView: React.FC<SubjectDepthViewProps> = ({
                         <div className="flex h-3 w-full overflow-hidden rounded-xs bg-[var(--bg-surface-subtle)]">
                           {wBasico > 0 && (
                             <div
-                              className="h-full bg-[#15803D]"
+                              className="h-full bg-[#059669]"
                               style={{ width: `${wBasico}%` }}
                               title={`Básico: ${row.basicoCount}`}
                             />
                           )}
                           {wApl > 0 && (
                             <div
-                              className="h-full bg-[#1B4FD8]"
+                              className="h-full bg-[#2563EB]"
                               style={{ width: `${wApl}%` }}
                               title={`Aplicação: ${row.aplicacaoCount}`}
                             />
                           )}
                           {wCalc > 0 && (
                             <div
-                              className="h-full bg-[#B45309]"
+                              className="h-full bg-[#D97706]"
                               style={{ width: `${wCalc}%` }}
                               title={`Cálculo/Estrutura: ${row.calculoEstruturaCount}`}
                             />

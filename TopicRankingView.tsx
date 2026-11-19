@@ -52,6 +52,16 @@ export const TopicRankingView: React.FC<TopicRankingViewProps> = ({
   const maxFreq = Math.max(...visibleRows.map((r) => r.frequencia), 1);
   const activeMeta = LEVELS.find((l) => l.id === level)!;
 
+  const totalInScope = useMemo(
+    () => rankingRows.reduce((s, r) => s + r.frequencia, 0),
+    [rankingRows]
+  );
+  const top3Pct = useMemo(() => {
+    if (totalInScope === 0) return 0;
+    const sum3 = rankingRows.slice(0, 3).reduce((s, r) => s + r.frequencia, 0);
+    return (sum3 / totalInScope) * 100;
+  }, [rankingRows, totalInScope]);
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -66,6 +76,39 @@ export const TopicRankingView: React.FC<TopicRankingViewProps> = ({
         <span className="font-mono text-xs font-medium text-[var(--text-muted)] tabular-nums">
           {rankingRows.length} classificações distintas
         </span>
+      </div>
+
+      {/* KPI Summary Strip */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="ui-card p-4">
+          <div className="text-xs text-[var(--text-muted)]">Questões no recorte</div>
+          <div className="mt-1 font-mono text-2xl font-bold text-[var(--text-primary)] tabular-nums">
+            {totalInScope}
+          </div>
+          <div className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+            {rankingRows.length} temas distintos ranqueados
+          </div>
+        </div>
+        <div className="ui-card p-4">
+          <div className="text-xs text-[var(--text-muted)]">1º colocado no nível atual</div>
+          <div className="mt-1 truncate text-sm font-bold text-[var(--brand-secondary)]">
+            {rankingRows[0]?.label || '—'}
+          </div>
+          <div className="mt-1 font-mono text-xs text-[var(--brand-primary)] tabular-nums">
+            {rankingRows[0]
+              ? `${rankingRows[0].frequencia} questões (${rankingRows[0].percentual.toFixed(1)}%)`
+              : 'Sem registros'}
+          </div>
+        </div>
+        <div className="ui-card p-4">
+          <div className="text-xs text-[var(--text-muted)]">Concentração Top 3</div>
+          <div className="mt-1 font-mono text-2xl font-bold text-[var(--brand-indigo)] tabular-nums">
+            {top3Pct.toFixed(1)}%
+          </div>
+          <div className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+            participação dos 3 primeiros colocados
+          </div>
+        </div>
       </div>
 
       {/* Classification Level Selector & Exam Filter */}
@@ -154,8 +197,18 @@ export const TopicRankingView: React.FC<TopicRankingViewProps> = ({
                 <div className="flex flex-1 items-center gap-3">
                   <div className="h-5 flex-1 overflow-hidden rounded-sm bg-[var(--bg-surface-subtle)]">
                     <div
-                      className="h-full rounded-sm bg-[var(--brand-primary)] transition-colors group-hover:bg-[var(--brand-primary-hover)]"
-                      style={{ width: `${pctWidth}%` }}
+                      className="h-full rounded-sm transition-opacity group-hover:opacity-90"
+                      style={{
+                        width: `${pctWidth}%`,
+                        backgroundColor:
+                          idx === 0
+                            ? '#14213D'
+                            : idx < 3
+                              ? '#2563EB'
+                              : idx < 8
+                                ? '#4338CA'
+                                : '#06B6D4',
+                      }}
                     />
                   </div>
                   <div className="w-36 shrink-0 text-right font-mono text-xs tabular-nums">

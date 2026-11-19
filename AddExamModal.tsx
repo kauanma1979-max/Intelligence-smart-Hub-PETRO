@@ -174,14 +174,14 @@ export const AddExamModal: React.FC<AddExamModalProps> = ({
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="flex-1 space-y-5 overflow-y-auto p-6">
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs">
-              <span className="text-slate-600">
+            <div className="ui-surface-subtle flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 text-xs">
+              <span className="text-[var(--text-secondary)]">
                 Quer testar rapidamente o recálculo automático do Pareto?
               </span>
               <button
                 type="button"
                 onClick={handleLoadSample}
-                className="font-semibold text-blue-700 hover:underline"
+                className="font-semibold text-[var(--brand-primary-ink)] hover:underline"
               >
                 Preencher exemplo (4 questões)
               </button>
@@ -190,7 +190,7 @@ export const AddExamModal: React.FC<AddExamModalProps> = ({
             {errorMsg && (
               <div
                 role="alert"
-                className="rounded-md border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-800"
+                className="rounded-lg border border-[var(--status-error-border)] bg-[var(--status-error-bg)] px-3.5 py-2.5 text-xs font-medium text-[var(--status-error)]"
               >
                 {errorMsg}
               </div>
@@ -282,9 +282,9 @@ export const AddExamModal: React.FC<AddExamModalProps> = ({
             </div>
 
             {/* Questions List */}
-            <div className="space-y-3 border-t border-slate-200 pt-4">
+            <div className="space-y-3 border-t border-[var(--border-subtle)] pt-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-slate-900">
+                <h3 className="text-xs font-semibold text-[var(--text-primary)]">
                   Questões da prova ({questoes.length})
                 </h3>
                 <button
@@ -299,7 +299,7 @@ export const AddExamModal: React.FC<AddExamModalProps> = ({
                       },
                     ])
                   }
-                  className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                  className="ui-btn-secondary !min-h-[34px] !px-3 !py-1 text-[var(--brand-primary-ink)]"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Adicionar questão
@@ -309,10 +309,10 @@ export const AddExamModal: React.FC<AddExamModalProps> = ({
               {questoes.map((q, idx) => (
                 <div
                   key={idx}
-                  className="space-y-3 rounded-md border border-slate-200 bg-slate-50/50 p-3.5"
+                  className="ui-surface-subtle space-y-3 p-3.5"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-semibold text-slate-700">
+                    <span className="font-mono text-xs font-semibold text-[var(--text-primary)]">
                       Item #{idx + 1}
                     </span>
                     {questoes.length > 1 && (
@@ -322,7 +322,7 @@ export const AddExamModal: React.FC<AddExamModalProps> = ({
                           setQuestoes((prev) => prev.filter((_, i) => i !== idx))
                         }
                         aria-label={`Remover item ${idx + 1}`}
-                        className="text-slate-400 hover:text-red-600"
+                        className="text-[var(--text-muted)] hover:text-[var(--status-error)]"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>

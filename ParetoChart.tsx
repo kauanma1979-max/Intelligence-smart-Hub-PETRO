@@ -66,7 +66,7 @@ export const ParetoChart: React.FC<ParetoChartProps> = ({
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--text-secondary)]">
           <span className="flex items-center gap-2">
-            <span className="inline-block h-2.5 w-2.5 rounded-xs bg-[#1B4FD8]" aria-hidden="true" />
+            <span className="inline-block h-2.5 w-2.5 rounded-xs bg-[#2563EB]" aria-hidden="true" />
             Núcleo vital (até 80%)
           </span>
           <span className="flex items-center gap-2">
@@ -74,7 +74,7 @@ export const ParetoChart: React.FC<ParetoChartProps> = ({
             Complementar (&gt; 80%)
           </span>
           <span className="flex items-center gap-2">
-            <span className="inline-block h-0.5 w-4 bg-[#B45309]" aria-hidden="true" />
+            <span className="inline-block h-0.5 w-4 bg-[#D97706]" aria-hidden="true" />
             % Acumulado
           </span>
         </div>
@@ -97,14 +97,14 @@ export const ParetoChart: React.FC<ParetoChartProps> = ({
                   y1={y}
                   x2={width - padRight}
                   y2={y}
-                  stroke="#e2e8f0"
+                  stroke="#E2E8F0"
                   strokeWidth={1}
                 />
                 <text
                   x={padLeft - 8}
                   y={y + 4}
                   textAnchor="end"
-                  className="fill-slate-600 font-mono text-[11px]"
+                  className="fill-[#526077] font-mono text-[11px]"
                 >
                   {tick}
                 </text>
@@ -122,7 +122,7 @@ export const ParetoChart: React.FC<ParetoChartProps> = ({
                 y={y + 4}
                 textAnchor="start"
                 className={`font-mono text-[11px] ${
-                  pct === 80 ? 'fill-amber-700 font-semibold' : 'fill-slate-500'
+                  pct === 80 ? 'fill-[#B45309] font-semibold' : 'fill-[#526077]'
                 }`}
               >
                 {pct}%
@@ -136,7 +136,7 @@ export const ParetoChart: React.FC<ParetoChartProps> = ({
             y1={y80}
             x2={width - padRight}
             y2={y80}
-            stroke="#B45309"
+            stroke="#D97706"
             strokeWidth={1.5}
             strokeDasharray="5 4"
           />
@@ -144,7 +144,7 @@ export const ParetoChart: React.FC<ParetoChartProps> = ({
             x={width - padRight - 6}
             y={y80 + 14}
             textAnchor="end"
-            className="fill-amber-700 font-mono text-[11px] font-semibold"
+            className="fill-[#B45309] font-mono text-[11px] font-semibold"
           >
             Corte 80%
           </text>
@@ -157,11 +157,13 @@ export const ParetoChart: React.FC<ParetoChartProps> = ({
             const isHovered = hoveredIdx === idx;
             const fill = row.isNucleo80
               ? isHovered
-                ? '#153EB0'
-                : '#1B4FD8'
+                ? '#14213D'
+                : idx === 0
+                  ? '#14213D'
+                  : '#2563EB'
               : isHovered
-                ? '#64748b'
-                : '#cbd5e1';
+                ? '#64748B'
+                : '#CBD5E1';
 
             const shortLabel =
               row.grupo.length > 22 ? `${row.grupo.slice(0, 20)}…` : row.grupo;
@@ -196,7 +198,7 @@ export const ParetoChart: React.FC<ParetoChartProps> = ({
                   x={cx}
                   y={barTop - 6}
                   textAnchor="middle"
-                  className="fill-slate-800 font-mono text-[11px] font-semibold"
+                  className="fill-[#172033] font-mono text-[11px] font-semibold"
                 >
                   {row.frequencia}
                 </text>
@@ -205,7 +207,7 @@ export const ParetoChart: React.FC<ParetoChartProps> = ({
                   y={padTop + plotH + 16}
                   textAnchor="end"
                   transform={`rotate(-26, ${cx}, ${padTop + plotH + 16})`}
-                  className="fill-slate-700 text-[11px] font-medium"
+                  className="fill-[#334155] text-[11px] font-medium"
                 >
                   {shortLabel}
                 </text>
@@ -216,7 +218,7 @@ export const ParetoChart: React.FC<ParetoChartProps> = ({
           {/* Cumulative line */}
           <polyline
             fill="none"
-            stroke="#B45309"
+            stroke="#D97706"
             strokeWidth={2.25}
             points={linePoints}
             pointerEvents="none"
@@ -230,7 +232,7 @@ export const ParetoChart: React.FC<ParetoChartProps> = ({
               cy={yPct(row.acumulado)}
               r={hoveredIdx === idx ? 5 : 3.5}
               fill="#ffffff"
-              stroke="#B45309"
+              stroke="#D97706"
               strokeWidth={2}
               pointerEvents="none"
             />

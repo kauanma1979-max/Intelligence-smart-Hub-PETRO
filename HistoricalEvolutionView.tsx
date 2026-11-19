@@ -2,11 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
 import type { HistoricalTopicEvolution, QuestionRecord } from '../types/exam';
 import { buildHistoricalEvolution } from '../utils/examIntelligence';
+import { MultiLineEvolutionChart, type MultiLineSeries } from './DataVizCharts';
 
 interface HistoricalEvolutionViewProps {
   questions: QuestionRecord[];
   onInspectQuestions: (title: string, subtitle: string, list: QuestionRecord[]) => void;
 }
+
+const MULTI_COLORS = ['#14213D', '#2563EB', '#4338CA', '#06B6D4'];
 
 export const HistoricalEvolutionView: React.FC<HistoricalEvolutionViewProps> = ({
   questions,
@@ -15,6 +18,7 @@ export const HistoricalEvolutionView: React.FC<HistoricalEvolutionViewProps> = (
   const [dimension, setDimension] = useState<'grupo' | 'edital'>('grupo');
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [metricMode, setMetricMode] = useState<'pct' | 'count'>('pct');
+  const [chartMode, setChartMode] = useState<'single' | 'multi'>('multi');
 
   const evolutionRows = useMemo(
     () => buildHistoricalEvolution(questions, dimension),
@@ -77,6 +81,24 @@ export const HistoricalEvolutionView: React.FC<HistoricalEvolutionViewProps> = (
   });
 
   const polylinePoints = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+
+  const multiSeries = useMemo<MultiLineSeries[]>(() => {
+    const topRows = [...evolutionRows]
+      .sort((a, b) => b.totalGeral - a.totalGeral)
+      .slice(0, 4);
+    return topRows.map((row, idx) => ({
+      id: row.tema,
+      label: row.tema,
+      color: MULTI_COLORS[idx % MULTI_COLORS.length],
+      points: row.pontos.map((pt) => ({
+        xLabel: pt.concursoCurto,
+        subLabel: `${pt.banca} · ${pt.totalProva}q`,
+        value: metricMode === 'pct' ? pt.percentual : pt.frequencia,
+        count: pt.frequencia,
+        questions: pt.questoes,
+      })),
+    }));
+  }, [evolutionRows, metricMode]);
 
   return (
     <div className="space-y-6">
@@ -150,37 +172,86 @@ export const HistoricalEvolutionView: React.FC<HistoricalEvolutionViewProps> = (
             </select>
           </div>
 
-          <div
-            className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] p-1"
-            role="group"
-            aria-label="Métrica do gráfico cronológico"
-          >
-            <button
-              type="button"
-              onClick={() => setMetricMode('pct')}
-              className={`min-h-[38px] rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap ${
-                metricMode === 'pct'
-                  ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] p-1"
+              role="group"
+              aria-label="Modo de visualização do gráfico"
             >
-              % da prova
-            </button>
-            <button
-              type="button"
-              onClick={() => setMetricMode('count')}
-              className={`min-h-[38px] rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap ${
-                metricMode === 'count'
-                  ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
+              <button
+                type="button"
+                onClick={() => setChartMode('multi')}
+                className={`min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap ${
+                  chartMode === 'multi'
+                    ? 'bg-[var(--brand-secondary)] text-white'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Comparativo Top 4
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartMode('single')}
+                className={`min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap ${
+                  chartMode === 'single'
+                    ? 'bg-[var(--brand-secondary)] text-white'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Assunto isolado
+              </button>
+            </div>
+
+            <div
+              className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] p-1"
+              role="group"
+              aria-label="Métrica do gráfico cronológico"
             >
-              Nº de questões
-            </button>
+              <button
+                type="button"
+                onClick={() => setMetricMode('pct')}
+                className={`min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap ${
+                  metricMode === 'pct'
+                    ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                % da prova
+              </button>
+              <button
+                type="button"
+                onClick={() => setMetricMode('count')}
+                className={`min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap ${
+                  metricMode === 'count'
+                    ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Nº de questões
+              </button>
+            </div>
           </div>
         </div>
 
-        {activeRow && (
+        {chartMode === 'multi' && (
+          <div className="mt-4">
+            <MultiLineEvolutionChart
+              title="Evolução Simultânea — Top 4 Temas na Série Histórica"
+              subtitle="Clique em qualquer vértice colorido para consultar as questões daquele tema na prova correspondente."
+              series={multiSeries}
+              unitMode={metricMode}
+              onSelectPoint={(seriesLabel, xLabel, list, val, count) =>
+                onInspectQuestions(
+                  `${seriesLabel} — ${xLabel}`,
+                  `${count} questão(ões) (${metricMode === 'pct' ? `${val.toFixed(1)}% da prova` : `${count} questões`})`,
+                  list
+                )
+              }
+            />
+          </div>
+        )}
+
+        {chartMode === 'single' && activeRow && (
           <div className="mt-4">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
               <div className="flex flex-wrap items-center gap-2 text-slate-600">
@@ -244,7 +315,7 @@ export const HistoricalEvolutionView: React.FC<HistoricalEvolutionViewProps> = (
                 {coords.length > 1 && (
                   <polyline
                     fill="none"
-                    stroke="#1d4ed8"
+                    stroke="#2563EB"
                     strokeWidth={2.5}
                     strokeLinejoin="round"
                     points={polylinePoints}
@@ -268,7 +339,7 @@ export const HistoricalEvolutionView: React.FC<HistoricalEvolutionViewProps> = (
                       cx={x}
                       cy={y}
                       r={6}
-                      fill={point.frequencia > 0 ? '#1d4ed8' : '#cbd5e1'}
+                      fill={point.frequencia > 0 ? '#14213D' : '#CBD5E1'}
                       stroke="#ffffff"
                       strokeWidth={2}
                     />
@@ -346,22 +417,22 @@ export const HistoricalEvolutionView: React.FC<HistoricalEvolutionViewProps> = (
           </div>
         </section>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-5">
-          <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-            <ArrowDownRight className="h-4 w-4 text-amber-700" />
+        <section className="ui-card p-5">
+          <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] pb-3">
+            <ArrowDownRight className="h-4 w-4 text-[var(--status-warning)]" />
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">
+              <h2 className="ui-section-title">
                 Assuntos que perderam espaço relativo
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[var(--text-muted)]">
                 Redução percentual comparando provas recentes (2023.2–2026) com iniciais (2018–2023.1).
               </p>
             </div>
           </div>
 
-          <div className="mt-3 divide-y divide-slate-100">
+          <div className="mt-3 divide-y divide-[var(--border-subtle)]">
             {falling.length === 0 ? (
-              <p className="py-4 text-xs text-slate-500">
+              <p className="py-4 text-xs text-[var(--text-muted)]">
                 Nenhum tema apresentou redução acima de 0.5 p.p.
               </p>
             ) : (
@@ -369,13 +440,16 @@ export const HistoricalEvolutionView: React.FC<HistoricalEvolutionViewProps> = (
                 <button
                   key={r.tema}
                   type="button"
-                  onClick={() => setSelectedTopic(r.tema)}
-                  className="flex w-full items-center justify-between gap-3 py-2.5 text-left transition-colors hover:bg-slate-50"
+                  onClick={() => {
+                    setSelectedTopic(r.tema);
+                    setChartMode('single');
+                  }}
+                  className="flex w-full items-center justify-between gap-3 py-2.5 text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
                 >
-                  <span className="truncate text-xs font-medium text-slate-900">
+                  <span className="truncate text-xs font-medium text-[var(--text-primary)]">
                     {r.tema}
                   </span>
-                  <span className="shrink-0 font-mono text-xs font-semibold text-amber-700 tabular-nums">
+                  <span className="shrink-0 font-mono text-xs font-semibold text-[var(--status-warning)] tabular-nums">
                     {r.deltaPercentual.toFixed(1)} p.p. ({r.totalGeral}q)
                   </span>
                 </button>
@@ -386,12 +460,12 @@ export const HistoricalEvolutionView: React.FC<HistoricalEvolutionViewProps> = (
       </div>
 
       {/* Full Chronological Matrix */}
-      <section className="rounded-lg border border-slate-200 bg-white">
-        <div className="border-b border-slate-200 px-5 py-3.5">
-          <h2 className="text-sm font-semibold text-slate-900">
+      <section className="ui-card overflow-hidden">
+        <div className="border-b border-[var(--border-subtle)] px-5 py-3.5">
+          <h2 className="ui-section-title">
             Série Histórica Completa por Concurso (2018 → 2026)
           </h2>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[var(--text-muted)]">
             Clique em qualquer célula para abrir as questões daquela prova ou no título da linha para atualizar o gráfico acima.
           </p>
         </div>
@@ -399,7 +473,7 @@ export const HistoricalEvolutionView: React.FC<HistoricalEvolutionViewProps> = (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-600">
+              <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] text-[11px] font-semibold text-[var(--text-secondary)]">
                 <th className="px-4 py-3">Assunto</th>
                 {(evolutionRows[0]?.pontos || []).map((pt) => (
                   <th key={pt.prova} className="px-3 py-3 text-right whitespace-nowrap">

@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Plus, RotateCcw } from 'lucide-react';
 import type { ExamSummary, ParetoRow, QuestionRecord } from '../types/exam';
+import { buildTopicExamHeatmap } from '../utils/examIntelligence';
+import { CoverageDonutChart, HeatmapMatrixChart } from './DataVizCharts';
 import { ParetoChart } from './ParetoChart';
 
 interface OverviewParetoViewProps {
@@ -22,15 +24,74 @@ export const OverviewParetoView: React.FC<OverviewParetoViewProps> = ({
   onOpenAddExam,
   onResetCustomExams,
 }) => {
+  const [donutMode, setDonutMode] = useState<'pareto' | 'vinculo'>('pareto');
+
   const total = questions.length;
   const core80Rows = paretoRows.filter((r) => r.isNucleo80);
   const core80Count = core80Rows.reduce((s, r) => s + r.frequencia, 0);
   const core80Pct = total > 0 ? (core80Count / total) * 100 : 0;
 
-  const directCount = questions.filter((q) => q.vinculo === 'Direto').length;
+  const directQuestions = useMemo(
+    () => questions.filter((q) => q.vinculo === 'Direto'),
+    [questions]
+  );
+  const correlatoQuestions = useMemo(
+    () => questions.filter((q) => q.vinculo !== 'Direto'),
+    [questions]
+  );
+  const directCount = directQuestions.length;
   const directPct = total > 0 ? (directCount / total) * 100 : 0;
 
   const shortExamColumns = exams.map((e) => e.concursoCurto);
+
+  const heatmapData = useMemo(
+    () => buildTopicExamHeatmap(questions, 'grupo', 10),
+    [questions]
+  );
+
+  const coreQuestions = useMemo(
+    () => core80Rows.flatMap((r) => r.questoes),
+    [core80Rows]
+  );
+  const compQuestions = useMemo(
+    () => paretoRows.filter((r) => !r.isNucleo80).flatMap((r) => r.questoes),
+    [paretoRows]
+  );
+
+  const donutSegments =
+    donutMode === 'pareto'
+      ? [
+          {
+            id: 'nucleo80',
+            label: 'Núcleo Pareto (80/20)',
+            value: core80Count,
+            color: '#14213D',
+            icon: 'cobrado' as const,
+          },
+          {
+            id: 'complementar',
+            label: 'Grupos complementares',
+            value: total - core80Count,
+            color: '#94A3B8',
+            icon: 'neutral' as const,
+          },
+        ]
+      : [
+          {
+            id: 'direto',
+            label: 'Vínculo Direto com Edital',
+            value: directCount,
+            color: '#059669',
+            icon: 'cobrado' as const,
+          },
+          {
+            id: 'correlato',
+            label: 'Vínculo Correlato',
+            value: total - directCount,
+            color: '#D97706',
+            icon: 'aprofundamento' as const,
+          },
+        ];
 
   return (
     <div className="space-y-6">
@@ -129,6 +190,102 @@ export const OverviewParetoView: React.FC<OverviewParetoViewProps> = ({
           )
         }
       />
+
+      {/* Secondary BI Grid: Distribution Donut + Groups × Exams Heatmap */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        <div className="xl:col-span-5 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <div
+              role="group"
+              aria-label="Alternar leitura do gráfico de distribuição"
+              className="inline-flex rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1"
+            >
+              <button
+                type="button"
+                aria-pressed={donutMode === 'pareto'}
+                onClick={() => setDonutMode('pareto')}
+                className={`min-h-[32px] rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+                  donutMode === 'pareto'
+                    ? 'bg-[var(--brand-secondary)] text-white'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]'
+                }`}
+              >
+                Núcleo 80/20
+              </button>
+              <button
+                type="button"
+                aria-pressed={donutMode === 'vinculo'}
+                onClick={() => setDonutMode('vinculo')}
+                className={`min-h-[32px] rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+                  donutMode === 'vinculo'
+                    ? 'bg-[var(--brand-secondary)] text-white'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]'
+                }`}
+              >
+                Vínculo Edital
+              </button>
+            </div>
+          </div>
+
+          <CoverageDonutChart
+            title={
+              donutMode === 'pareto'
+                ? 'Concentração do Núcleo Pareto'
+                : 'Aderência Direta × Correlata'
+            }
+            subtitle="Clique em uma fatia para inspecionar o conjunto completo de questões."
+            segments={donutSegments}
+            centerValue={
+              donutMode === 'pareto'
+                ? `${core80Pct.toFixed(0)}%`
+                : `${directPct.toFixed(0)}%`
+            }
+            centerLabel={donutMode === 'pareto' ? 'núcleo 80%' : 'vínculo direto'}
+            onSelectSegment={(segId) => {
+              if (segId === 'nucleo80') {
+                onInspectQuestions(
+                  'Núcleo Pareto 80/20',
+                  `${coreQuestions.length} questões nos grupos prioritários`,
+                  coreQuestions
+                );
+              } else if (segId === 'complementar') {
+                onInspectQuestions(
+                  'Grupos Complementares (20%)',
+                  `${compQuestions.length} questões de menor incidência`,
+                  compQuestions
+                );
+              } else if (segId === 'direto') {
+                onInspectQuestions(
+                  'Vínculo Direto com o Edital',
+                  `${directQuestions.length} questões diretamente previstas no conteúdo`,
+                  directQuestions
+                );
+              } else {
+                onInspectQuestions(
+                  'Vínculo Correlato ao Edital',
+                  `${correlatoQuestions.length} questões correlatas ou interdisciplinares`,
+                  correlatoQuestions
+                );
+              }
+            }}
+          />
+        </div>
+
+        <div className="xl:col-span-7">
+          <HeatmapMatrixChart
+            title="Mapa de Calor — Grupos de Estudo × Concursos"
+            subtitle="Densidade absoluta de questões por grupo consolidado em cada prova. Clique em uma célula para abrir as questões."
+            data={heatmapData}
+            onSelectCell={(topic, exam, list) =>
+              onInspectQuestions(
+                `${topic} — ${exam}`,
+                `${list.length} questão(ões) registradas nesta prova`,
+                list
+              )
+            }
+          />
+        </div>
+      </div>
 
       {/* Full Pareto Table */}
       <section className="ui-card overflow-hidden">

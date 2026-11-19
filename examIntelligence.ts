@@ -14,8 +14,12 @@ import type {
   ExamIntelligenceBackup,
   ExamIntelligenceBackupData,
   ExamSummary,
+  GapStatus,
+  HeatmapMatrixData,
   HistoricalPoint,
   HistoricalTopicEvolution,
+  KnowledgeAtlasData,
+  KnowledgeAtlasNode,
   LinkType,
   LocatorFilters,
   NewExamPayload,
@@ -2517,3 +2521,391 @@ export function parseAndReconcileBackup(
         : new Date().toISOString(),
   };
 }
+
+// ============================================================================
+// Knowledge Atlas (4-Level Real Hierarchy) & Heatmap Matrix Builders
+// ============================================================================
+
+function mostFrequentLabel(values: string[], fallback: string): string {
+  if (values.length === 0) return fallback;
+  const counts = new Map<string, number>();
+  for (const v of values) {
+    const clean = v.trim();
+    if (!clean) continue;
+    counts.set(clean, (counts.get(clean) || 0) + 1);
+  }
+  let best = fallback;
+  let bestCount = -1;
+  for (const [label, c] of counts.entries()) {
+    if (c > bestCount) {
+      best = label;
+      bestCount = c;
+    }
+  }
+  return best;
+}
+
+function inferUnmatchedDiscipline(code: string): string {
+  if (/^(ANSA\.BI|B1)\./i.test(code)) {
+    return 'Bloco I — Itens sem questão na amostra';
+  }
+  if (/^(ANSA\.BII|B2)\./i.test(code)) {
+    return 'Bloco II — Itens sem questão na amostra';
+  }
+  if (/^(ANSA\.BIII|B3)\./i.test(code)) {
+    return 'Bloco III — Itens sem questão na amostra';
+  }
+  return 'Itens do edital sem questão na amostra';
+}
+
+function aggregateBranchStatus(children: KnowledgeAtlasNode[]): GapStatus {
+  if (children.length === 0) return 'nao_identificado';
+  const statuses = new Set(children.map((c) => c.status));
+  if (statuses.size === 1) {
+    return children[0].status;
+  }
+  if (statuses.has('nao_identificado')) {
+    return 'parcial';
+  }
+  if (statuses.has('aprofundamento')) {
+    return 'aprofundamento';
+  }
+  if (statuses.has('parcial')) {
+    return 'parcial';
+  }
+  return 'cobrado';
+}
+
+function formatQuestionReference(q: QuestionRecord): string {
+  return `${q.concursoCurto} · Q${q.questao} (Pág. ${q.paginaPdf})`;
+}
+
+function computeStatusForFilteredSlice(
+  inSlice: QuestionRecord[],
+  otherSlice: QuestionRecord[],
+  originalStatus: GapStatus,
+  hasActiveExamOrBoardFilter: boolean
+): GapStatus {
+  if (!hasActiveExamOrBoardFilter) return originalStatus;
+  if (inSlice.length === 0) return 'nao_identificado';
+  const direto = inSlice.filter((q) => q.vinculo === 'Direto').length;
+  const correlato = inSlice.length - direto;
+  if (correlato > 0 && direto === 0) return 'aprofundamento';
+  if (inSlice.length === 1) return 'parcial';
+  if (correlato > 0) return 'aprofundamento';
+  if (otherSlice.length > 0 && direto < 2) return 'parcial';
+  return 'cobrado';
+}
+
+export interface KnowledgeAtlasFilterOptions {
+  banca?: string;
+  prova?: string;
+  disciplina?: string;
+  status?: 'all' | GapStatus;
+}
+
+export function buildKnowledgeAtlasTree(
+  gapRows: SyllabusGapRow[],
+  allQuestions: QuestionRecord[],
+  rootLabel: string,
+  filters: KnowledgeAtlasFilterOptions = {}
+): KnowledgeAtlasData {
+  const bancaFilter = filters.banca && filters.banca !== 'Todas' ? filters.banca : null;
+  const provaFilter = filters.prova && filters.prova !== 'Todas' ? filters.prova : null;
+  const discFilter =
+    filters.disciplina && filters.disciplina !== 'Todas' ? filters.disciplina : null;
+  const statusFilter =
+    filters.status && filters.status !== 'all' ? filters.status : null;
+
+  const bancas = Array.from(new Set(allQuestions.map((q) => q.banca))).filter(Boolean).sort();
+  const provas = Array.from(new Set(allQuestions.map((q) => q.concursoCurto))).filter(Boolean);
+
+  const hasSliceFilter = Boolean(bancaFilter || provaFilter);
+
+  const matchesQuestionFilter = (q: QuestionRecord) => {
+    if (bancaFilter && q.banca !== bancaFilter) return false;
+    if (provaFilter && q.concursoCurto !== provaFilter) return false;
+    return true;
+  };
+
+  interface LeafEntry {
+    row: SyllabusGapRow;
+    disc: string;
+    assunto: string;
+    subtopico: string;
+    inSlice: QuestionRecord[];
+    otherSlice: QuestionRecord[];
+    status: GapStatus;
+  }
+
+  const rawEntries: LeafEntry[] = gapRows.map((row) => {
+    const combinedPool = Array.from(
+      new Map(
+        [...row.questoesNaSelecao, ...row.questoesEmOutrasProvas].map((q) => [q.id, q])
+      ).values()
+    );
+
+    const inSlice = provaFilter
+      ? combinedPool.filter(matchesQuestionFilter)
+      : bancaFilter
+        ? row.questoesNaSelecao.filter((q) => q.banca === bancaFilter)
+        : row.questoesNaSelecao;
+
+    const inSliceIds = new Set(inSlice.map((q) => q.id));
+    const otherSlice = combinedPool.filter((q) => !inSliceIds.has(q.id));
+
+    const refPool =
+      inSlice.length > 0
+        ? inSlice
+        : otherSlice.length > 0
+          ? otherSlice
+          : combinedPool;
+
+    const disc =
+      refPool.length > 0
+        ? mostFrequentLabel(
+            refPool.map((q) => q.grupoEstudo),
+            'Outros tópicos'
+          )
+        : inferUnmatchedDiscipline(row.codigo);
+
+    const assunto =
+      refPool.length > 0
+        ? mostFrequentLabel(
+            refPool.map((q) => q.topicoEditalUnificado),
+            row.titulo
+          )
+        : row.codigo.startsWith('ITEM.')
+          ? row.titulo
+          : 'Lacuna sem questão catalogada';
+
+    const subtopico =
+      refPool.length > 0
+        ? mostFrequentLabel(
+            refPool.map((q) =>
+              q.subtopico && q.subtopico !== 'Conceito geral'
+                ? `${q.topico} — ${q.subtopico}`
+                : q.topico || q.tema
+            ),
+            row.titulo
+          )
+        : 'Item aguardando ocorrência em prova';
+
+    const status = computeStatusForFilteredSlice(
+      inSlice,
+      otherSlice,
+      row.status,
+      hasSliceFilter
+    );
+
+    return {
+      row,
+      disc,
+      assunto,
+      subtopico,
+      inSlice,
+      otherSlice,
+      status,
+    };
+  });
+
+  const disciplines = Array.from(new Set(rawEntries.map((e) => e.disc))).sort();
+
+  const filteredEntries = rawEntries.filter((e) => {
+    if (discFilter && e.disc !== discFilter) return false;
+    if (statusFilter && e.status !== statusFilter) return false;
+    return true;
+  });
+
+  const nodeMap: Record<string, KnowledgeAtlasNode> = {};
+
+  // Build hierarchical tree: Level 1 -> Level 2 -> Level 3 -> Level 4
+  const discMap = new Map<
+    string,
+    Map<string, Map<string, LeafEntry[]>>
+  >();
+
+  for (const entry of filteredEntries) {
+    let assuntoMap = discMap.get(entry.disc);
+    if (!assuntoMap) {
+      assuntoMap = new Map();
+      discMap.set(entry.disc, assuntoMap);
+    }
+    let subMap = assuntoMap.get(entry.assunto);
+    if (!subMap) {
+      subMap = new Map();
+      assuntoMap.set(entry.assunto, subMap);
+    }
+    const list = subMap.get(entry.subtopico) || [];
+    list.push(entry);
+    subMap.set(entry.subtopico, list);
+  }
+
+  const rollupNode = (
+    id: string,
+    level: 0 | 1 | 2 | 3,
+    label: string,
+    children: KnowledgeAtlasNode[],
+    parentId?: string
+  ): KnowledgeAtlasNode => {
+    const qMap = new Map<string, QuestionRecord>();
+    const otherMap = new Map<string, QuestionRecord>();
+    for (const child of children) {
+      for (const q of child.questions) qMap.set(q.id, q);
+      for (const o of child.otherExamQuestions) {
+        if (!qMap.has(o.id)) otherMap.set(o.id, o);
+      }
+    }
+    const mergedQuestions = Array.from(qMap.values());
+    const mergedOthers = Array.from(otherMap.values());
+    const directCount = mergedQuestions.filter((q) => q.vinculo === 'Direto').length;
+    const correlatoCount = mergedQuestions.length - directCount;
+    const exams = Array.from(new Set(mergedQuestions.map((q) => q.concursoCurto)));
+    const questionRefs = mergedQuestions.slice(0, 12).map(formatQuestionReference);
+
+    const node: KnowledgeAtlasNode = {
+      id,
+      level,
+      label,
+      status: aggregateBranchStatus(children),
+      questionCount: mergedQuestions.length,
+      otherExamCount: mergedOthers.length,
+      directCount,
+      correlatoCount,
+      exams,
+      questionRefs,
+      questions: mergedQuestions,
+      otherExamQuestions: mergedOthers,
+      parentId,
+      children,
+    };
+    nodeMap[id] = node;
+    return node;
+  };
+
+  const rootId = 'atlas-root';
+  const level1Nodes: KnowledgeAtlasNode[] = [];
+
+  let dIdx = 0;
+  for (const [discLabel, assuntoMap] of discMap.entries()) {
+    const discId = `l1-${dIdx++}`;
+    const level2Nodes: KnowledgeAtlasNode[] = [];
+
+    let aIdx = 0;
+    for (const [assuntoLabel, subMap] of assuntoMap.entries()) {
+      const assuntoId = `${discId}-l2-${aIdx++}`;
+      const level3Nodes: KnowledgeAtlasNode[] = [];
+
+      let sIdx = 0;
+      for (const [subLabel, entries] of subMap.entries()) {
+        const subId = `${assuntoId}-l3-${sIdx++}`;
+        const level4Nodes: KnowledgeAtlasNode[] = entries.map((entry) => {
+          const l4Id = `l4-${entry.row.codigo}`;
+          const directCount = entry.inSlice.filter((q) => q.vinculo === 'Direto').length;
+          const correlatoCount = entry.inSlice.length - directCount;
+          const node: KnowledgeAtlasNode = {
+            id: l4Id,
+            level: 4,
+            code: entry.row.codigo,
+            label: entry.row.titulo,
+            status: entry.status,
+            questionCount: entry.inSlice.length,
+            otherExamCount: entry.otherSlice.length,
+            directCount,
+            correlatoCount,
+            exams: Array.from(
+              new Set(
+                (entry.inSlice.length > 0 ? entry.inSlice : entry.otherSlice).map(
+                  (q) => q.concursoCurto
+                )
+              )
+            ),
+            questionRefs: (entry.inSlice.length > 0 ? entry.inSlice : entry.otherSlice)
+              .slice(0, 12)
+              .map(formatQuestionReference),
+            questions: entry.inSlice,
+            otherExamQuestions: entry.otherSlice,
+            recommendation: entry.row.recomendacao,
+            parentId: subId,
+            children: [],
+          };
+          nodeMap[l4Id] = node;
+          return node;
+        });
+
+        level3Nodes.push(rollupNode(subId, 3, subLabel, level4Nodes, assuntoId));
+      }
+
+      level2Nodes.push(rollupNode(assuntoId, 2, assuntoLabel, level3Nodes, discId));
+    }
+
+    level1Nodes.push(rollupNode(discId, 1, discLabel, level2Nodes, rootId));
+  }
+
+  level1Nodes.sort((a, b) => b.questionCount - a.questionCount || a.label.localeCompare(b.label));
+  const root = rollupNode(rootId, 0, rootLabel, level1Nodes);
+
+  return {
+    root,
+    nodeMap,
+    disciplines,
+    bancas,
+    provas,
+  };
+}
+
+export function buildTopicExamHeatmap(
+  questions: QuestionRecord[],
+  dimension: 'grupo' | 'edital' = 'edital',
+  maxTopics: number = 14
+): HeatmapMatrixData {
+  if (questions.length === 0) {
+    return { exams: [], rows: [], maxCellCount: 0 };
+  }
+
+  const orderedExams = sortExamsChronologically(buildExamSummaries(questions));
+  const exams = orderedExams.map((e) => e.concursoCurto);
+  const examTotalMap = new Map(orderedExams.map((e) => [e.concursoCurto, e.totalQuestoes]));
+
+  const topicMap = new Map<string, Map<string, QuestionRecord[]>>();
+  for (const q of questions) {
+    const topic =
+      dimension === 'grupo' ? q.grupoEstudo : q.topicoEditalUnificado;
+    let byExam = topicMap.get(topic);
+    if (!byExam) {
+      byExam = new Map();
+      topicMap.set(topic, byExam);
+    }
+    const list = byExam.get(q.concursoCurto) || [];
+    list.push(q);
+    byExam.set(q.concursoCurto, list);
+  }
+
+  let maxCellCount = 0;
+  const rows = Array.from(topicMap.entries())
+    .map(([topic, byExam]) => {
+      let total = 0;
+      const cells = exams.map((exam) => {
+        const list = byExam.get(exam) || [];
+        total += list.length;
+        if (list.length > maxCellCount) maxCellCount = list.length;
+        const examTotal = examTotalMap.get(exam) || 1;
+        return {
+          exam,
+          count: list.length,
+          pct: (list.length / examTotal) * 100,
+          questions: list,
+        };
+      });
+      return { topic, total, cells };
+    })
+    .sort((a, b) => b.total - a.total || a.topic.localeCompare(b.topic))
+    .slice(0, maxTopics);
+
+  return {
+    exams,
+    rows,
+    maxCellCount,
+  };
+}
+

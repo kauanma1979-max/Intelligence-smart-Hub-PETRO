@@ -7,47 +7,54 @@
 }
 
 :root {
-  /* 60% Neutral Surfaces */
-  --bg-canvas: #F4F6FA;
+  /* 60% Neutral Surfaces — Knowledge Atlas Workspace */
+  --bg-canvas: #F5F7FB;
   --bg-surface: #FFFFFF;
-  --bg-surface-subtle: #EDF1F7;
-  --bg-surface-hover: #F1F5F9;
+  --bg-surface-subtle: #EEF2F8;
+  --bg-surface-hover: #F8FAFC;
 
-  /* 30% Structural Borders & Ink (WCAG AA >= 4.5:1) */
+  /* 30% Structural Borders & Ink (WCAG 2.2 AA >= 4.5:1) */
   --border-subtle: #E2E8F0;
   --border-strong: #CBD5E1;
-  --text-primary: #0F172A;
+  --text-primary: #172033;
   --text-secondary: #334155;
-  --text-muted: #475569;
+  --text-muted: #526077;
 
   /* 10% Brand & Technical Accents */
-  --brand-primary: #1B4FD8;
-  --brand-primary-hover: #153EB0;
-  --brand-primary-soft: #EBF1FD;
-  --brand-primary-ink: #143B9E;
-  --brand-secondary: #0F2942;
-  --brand-accent: #B45309;
+  --brand-secondary: #14213D;
+  --brand-indigo: #4338CA;
+  --brand-indigo-soft: #EEF2FF;
+  --brand-primary: #2563EB;
+  --brand-primary-hover: #1D4ED8;
+  --brand-primary-soft: #EFF6FF;
+  --brand-primary-ink: #1E3A8A;
+  --brand-cyan: #06B6D4;
+  --brand-cyan-ink: #0E7490;
+  --brand-accent: #D97706;
   --brand-accent-soft: #FEF3C7;
-  --focus-ring: #1B4FD8;
+  --focus-ring: #2563EB;
 
-  /* Semantic Status Tokens */
-  --status-success: #15803D;
-  --status-success-bg: #ECFDF3;
-  --status-success-border: #BBF7D0;
+  /* Semantic Status Tokens (paired with icons/labels in UI) */
+  --status-success: #047857;
+  --status-success-fill: #059669;
+  --status-success-bg: #ECFDF5;
+  --status-success-border: #A7F3D0;
   --status-warning: #B45309;
+  --status-warning-fill: #F59E0B;
   --status-warning-bg: #FFFBEB;
   --status-warning-border: #FDE68A;
-  --status-error: #B91C1C;
+  --status-error: #DC2626;
+  --status-error-fill: #DC2626;
   --status-error-bg: #FEF2F2;
   --status-error-border: #FECACA;
-  --status-info: #1D4ED8;
+  --status-info: #2563EB;
   --status-info-bg: #EFF6FF;
   --status-info-border: #BFDBFE;
 
   /* Elevation */
-  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-modal: 0 20px 44px -12px rgba(15, 23, 42, 0.22);
+  --shadow-xs: 0 1px 2px rgba(20, 33, 61, 0.04);
+  --shadow-sm: 0 1px 3px rgba(20, 33, 61, 0.07), 0 1px 2px rgba(20, 33, 61, 0.04);
+  --shadow-modal: 0 20px 44px -12px rgba(20, 33, 61, 0.25);
 }
 
 @layer base {
@@ -245,11 +252,17 @@
   .ui-textarea:focus {
     outline: none;
     border-color: var(--brand-primary);
-    box-shadow: 0 0 0 3px rgba(27, 79, 216, 0.16);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
   }
 
   .ui-cq {
     container-type: inline-size;
+  }
+
+  .atlas-dot-grid {
+    background-color: #F5F7FB;
+    background-image: radial-gradient(#CBD5E1 1px, transparent 1px);
+    background-size: 20px 20px;
   }
 }
 

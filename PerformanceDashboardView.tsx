@@ -9,6 +9,10 @@ import type {
   StudentAttemptRecord,
 } from '../types/exam';
 import { buildStudentPerformanceSummary } from '../utils/examIntelligence';
+import {
+  CoverageDonutChart,
+  HorizontalFrequencyBarChart,
+} from './DataVizCharts';
 
 interface PerformanceDashboardViewProps {
   questions: QuestionRecord[];
@@ -288,11 +292,11 @@ export const PerformanceDashboardView: React.FC<PerformanceDashboardViewProps> =
       {/* Registration Form Tab */}
       {subTab === 'registrar' && (
         <section className="ui-card p-5">
-          <div className="border-b border-slate-100 pb-3">
-            <h2 className="text-sm font-semibold text-slate-900">
+          <div className="border-b border-[var(--border-subtle)] pb-3">
+            <h2 className="ui-section-title">
               Adicionar Registro ao Histórico do Estudante
             </h2>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-[var(--text-muted)]">
               Cada registro fica vinculado à prova e ao número exato da questão, atualizando automaticamente os diagnósticos e o planejador de estudos.
             </p>
           </div>
@@ -613,19 +617,19 @@ export const PerformanceDashboardView: React.FC<PerformanceDashboardViewProps> =
                                 b.questoesErradas
                               )
                             }
-                            className="rounded-md border border-amber-200 bg-white p-3 text-left transition-colors hover:border-amber-400"
+                            className="rounded-lg border border-[var(--status-warning-border)] bg-[var(--bg-surface)] p-3 text-left transition-colors hover:border-[var(--brand-accent)]"
                           >
-                            <div className="text-xs font-semibold text-slate-900">
+                            <div className="text-xs font-semibold text-[var(--text-primary)]">
                               {b.subtopico}
                             </div>
-                            <div className="mt-0.5 text-[11px] text-slate-500">
+                            <div className="mt-0.5 text-[11px] text-[var(--text-muted)]">
                               {b.materia}
                             </div>
                             <div className="mt-1.5 flex items-center justify-between font-mono text-xs tabular-nums">
-                              <span className="font-bold text-red-700">
+                              <span className="font-bold text-[var(--status-error)]">
                                 {b.taxaSubtopico.toFixed(0)}% no subtópico
                               </span>
-                              <span className="text-slate-500">
+                              <span className="text-[var(--text-muted)]">
                                 ({b.taxaMateria.toFixed(0)}% na matéria)
                               </span>
                             </div>
@@ -636,6 +640,72 @@ export const PerformanceDashboardView: React.FC<PerformanceDashboardViewProps> =
                   </div>
                 </section>
               )}
+
+              {/* 2-Column BI Summary Row: Attempt Outcome Donut + Exam Accuracy Bars */}
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+                <div className="lg:col-span-5">
+                  <CoverageDonutChart
+                    title="Distribuição das Resoluções"
+                    subtitle="Balanço entre acertos, erros e itens sinalizados para revisão."
+                    centerValue={`${summary.taxaAcertoGeral.toFixed(0)}%`}
+                    centerLabel="acerto geral"
+                    segments={[
+                      {
+                        id: 'acertos',
+                        label: 'Acertos',
+                        value: summary.totalAcertos,
+                        color: '#059669',
+                        icon: 'cobrado',
+                      },
+                      {
+                        id: 'erros',
+                        label: 'Erros',
+                        value: summary.totalErros,
+                        color: '#DC2626',
+                        icon: 'nao_identificado',
+                      },
+                      {
+                        id: 'revisar',
+                        label: 'Para revisão',
+                        value: summary.totalRevisar,
+                        color: '#D97706',
+                        icon: 'aprofundamento',
+                      },
+                    ]}
+                  />
+                </div>
+
+                <div className="lg:col-span-7">
+                  <HorizontalFrequencyBarChart
+                    title="Aproveitamento por Concurso (%)"
+                    subtitle="Clique em qualquer prova para abrir as questões respondidas."
+                    valueUnit="%"
+                    maxItems={6}
+                    items={summary.porConcurso.map((c) => ({
+                      id: c.label,
+                      label: c.label,
+                      sublabel: `${c.acertos} acerto(s) · ${c.erros} erro(s) · tempo médio ${formatTime(c.tempoMedioSeg)}`,
+                      value: Math.round(c.taxaAcerto),
+                      color:
+                        c.taxaAcerto >= 75
+                          ? '#059669'
+                          : c.taxaAcerto >= 55
+                            ? '#D97706'
+                            : '#DC2626',
+                      questions: c.questoesTodas,
+                    }))}
+                    onSelectBar={(item) => {
+                      if (item.questions && item.questions.length > 0) {
+                        onInspectQuestions(
+                          `Desempenho em ${item.label}`,
+                          `${item.value}% de acerto (${item.questions.length} questão(ões) respondida(s))`,
+                          item.questions
+                        );
+                      }
+                    }}
+                  />
+                </div>
+              </div>
 
               {/* Subject & Subtopic Accuracy */}
               <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -684,10 +754,10 @@ export const PerformanceDashboardView: React.FC<PerformanceDashboardViewProps> =
                           <div
                             className={`h-full ${
                               m.taxaAcerto >= 75
-                                ? 'bg-[#15803D]'
+                                ? 'bg-[#059669]'
                                 : m.taxaAcerto >= 55
-                                  ? 'bg-[#B45309]'
-                                  : 'bg-[#B91C1C]'
+                                  ? 'bg-[#D97706]'
+                                  : 'bg-[#DC2626]'
                             }`}
                             style={{ width: `${Math.max(4, m.taxaAcerto)}%` }}
                           />
@@ -718,7 +788,7 @@ export const PerformanceDashboardView: React.FC<PerformanceDashboardViewProps> =
                     />
                   </div>
 
-                  <div className="mt-3 max-h-72 overflow-y-auto divide-y divide-slate-100">
+                  <div className="mt-3 max-h-72 overflow-y-auto divide-y divide-[var(--border-subtle)]">
                     {filteredSubtopics.map((s) => (
                       <div
                         key={`${s.parentGrupo}::${s.label}`}
@@ -734,11 +804,11 @@ export const PerformanceDashboardView: React.FC<PerformanceDashboardViewProps> =
                                 s.questoesTodas
                               )
                             }
-                            className="truncate text-left font-medium text-slate-900 hover:text-blue-700"
+                            className="truncate text-left font-medium text-[var(--text-primary)] hover:text-[var(--brand-primary-ink)]"
                           >
                             {s.label}
                           </button>
-                          <div className="truncate text-[11px] text-slate-500">
+                          <div className="truncate text-[11px] text-[var(--text-muted)]">
                             {s.parentGrupo}
                           </div>
                         </div>
@@ -746,15 +816,15 @@ export const PerformanceDashboardView: React.FC<PerformanceDashboardViewProps> =
                           <span
                             className={`font-bold ${
                               s.taxaAcerto >= 75
-                                ? 'text-emerald-700'
+                                ? 'text-[var(--status-success)]'
                                 : s.taxaAcerto >= 55
-                                  ? 'text-amber-700'
-                                  : 'text-red-700'
+                                  ? 'text-[var(--status-warning)]'
+                                  : 'text-[var(--status-error)]'
                             }`}
                           >
                             {s.taxaAcerto.toFixed(0)}%
                           </span>
-                          <span className="ml-1.5 text-[11px] text-slate-400">
+                          <span className="ml-1.5 text-[11px] text-[var(--text-muted)]">
                             ({s.acertos}/{s.totalRespondidas})
                           </span>
                         </div>
@@ -943,7 +1013,7 @@ export const PerformanceDashboardView: React.FC<PerformanceDashboardViewProps> =
                           <>
                             <polyline
                               fill="none"
-                              stroke="#64748B"
+                              stroke="#526077"
                               strokeWidth={1.5}
                               strokeDasharray="4 3"
                               points={summary.evolucaoTemporal
@@ -958,8 +1028,8 @@ export const PerformanceDashboardView: React.FC<PerformanceDashboardViewProps> =
                             />
                             <polyline
                               fill="none"
-                              stroke="#1B4FD8"
-                              strokeWidth={2.2}
+                              stroke="#2563EB"
+                              strokeWidth={2.4}
                               points={summary.evolucaoTemporal
                                 .map((p, i) => {
                                   const x =
@@ -982,7 +1052,7 @@ export const PerformanceDashboardView: React.FC<PerformanceDashboardViewProps> =
                           const y = 135 - (p.taxaAcerto / 100) * 110;
                           return (
                             <g key={p.dateKey}>
-                              <circle cx={x} cy={y} r={4} fill="#1B4FD8" />
+                              <circle cx={x} cy={y} r={4.5} fill="#14213D" stroke="#FFFFFF" strokeWidth={1.5} />
                               <text
                                 x={x}
                                 y={157}
@@ -995,7 +1065,7 @@ export const PerformanceDashboardView: React.FC<PerformanceDashboardViewProps> =
                                 x={x}
                                 y={Math.max(14, y - 9)}
                                 textAnchor="middle"
-                                className="fill-[#143B9E] font-mono text-[11px] font-bold"
+                                className="fill-[#14213D] font-mono text-[11px] font-bold"
                               >
                                 {p.taxaAcerto.toFixed(0)}%
                               </text>

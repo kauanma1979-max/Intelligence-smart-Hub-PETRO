@@ -10,12 +10,14 @@ import {
   buildDistractorRadar,
   buildExamSummaries,
   buildHistoricalEvolution,
+  buildKnowledgeAtlasTree,
   buildReasoningBreakdown,
   buildSmartStudyPlan,
   buildStudentPerformanceSummary,
   buildSubjectDepthAnalysis,
   buildSyllabusGapMap,
   buildSyllabusIncidenceMap,
+  buildTopicExamHeatmap,
   buildUnifiedDatabase,
   calculatePareto,
   calculateRanking,
@@ -496,3 +498,82 @@ test('backup payload exports and restores consistently while rejecting invalid s
     /JSON válido/
   );
 });
+
+test('buildKnowledgeAtlasTree builds 4 levels, respects filters, deduplicates question counts, and handles unmapped gaps', () => {
+  const db = buildUnifiedDatabase(paretoCsv, principalCsv);
+  const ansaGaps = buildSyllabusGapMap(db, 'ANSA_2026');
+
+  const atlas = buildKnowledgeAtlasTree(ansaGaps, db, 'ANSA 2026 — Edital');
+  assert.equal(atlas.root.level, 0);
+  assert.ok(atlas.root.children.length >= 3);
+  assert.ok(atlas.disciplines.length >= 3);
+  assert.deepEqual(atlas.bancas, ['CEBRASPE', 'CESGRANRIO']);
+
+  // Verify 4-level hierarchy: 0 -> 1 -> 2 -> 3 -> 4
+  const firstDisc = atlas.root.children[0];
+  assert.equal(firstDisc.level, 1);
+  const firstAssunto = firstDisc.children[0];
+  assert.equal(firstAssunto.level, 2);
+  const firstSub = firstAssunto.children[0];
+  assert.equal(firstSub.level, 3);
+  const firstLeaf = firstSub.children[0];
+  assert.equal(firstLeaf.level, 4);
+  assert.ok(firstLeaf.code);
+
+  // Deduplicated count matches root.questions.length
+  assert.equal(atlas.root.questionCount, atlas.root.questions.length);
+
+  // Unmapped gap item (ANSA.BI.07) still appears at level 4
+  const bi07Node = atlas.nodeMap['l4-ANSA.BI.07'];
+  assert.ok(bi07Node);
+  assert.equal(bi07Node.status, 'nao_identificado');
+  assert.equal(bi07Node.questionCount, 0);
+
+  // Filtering by status 'nao_identificado' isolates unseen items
+  const unseenAtlas = buildKnowledgeAtlasTree(ansaGaps, db, 'ANSA 2026', {
+    status: 'nao_identificado',
+  });
+  const leafStatuses = Object.values(unseenAtlas.nodeMap)
+    .filter((n) => n.level === 4)
+    .map((n) => n.status);
+  assert.ok(leafStatuses.length >= 1);
+  assert.ok(leafStatuses.every((s) => s === 'nao_identificado'));
+
+  // Filtering by banca + prova narrows scope cleanly
+  const cebraspeAtlas = buildKnowledgeAtlasTree(ansaGaps, db, 'ANSA 2026', {
+    banca: 'CEBRASPE',
+    prova: 'ANSA 2026',
+  });
+  assert.ok(
+    cebraspeAtlas.root.questions.every(
+      (q) => q.banca === 'CEBRASPE' && q.concursoCurto === 'ANSA 2026'
+    )
+  );
+});
+
+test('buildTopicExamHeatmap builds chronological exam columns and topic rows without empty errors', () => {
+  const db = buildUnifiedDatabase(paretoCsv, principalCsv);
+  const heatmap = buildTopicExamHeatmap(db, 'grupo', 10);
+
+  assert.deepEqual(heatmap.exams, [
+    'Transpetro 2018',
+    'Petrobras 2023.1',
+    'Petrobras 2023.2',
+    'Transpetro 2023.1',
+    'ANSA 2026',
+  ]);
+  assert.equal(heatmap.rows.length, 10);
+  assert.ok(heatmap.maxCellCount > 0);
+  for (const row of heatmap.rows) {
+    assert.equal(
+      row.cells.reduce((sum, c) => sum + c.count, 0),
+      row.total
+    );
+  }
+
+  const emptyHeatmap = buildTopicExamHeatmap([], 'edital', 10);
+  assert.equal(emptyHeatmap.rows.length, 0);
+  assert.equal(emptyHeatmap.exams.length, 0);
+  assert.equal(emptyHeatmap.maxCellCount, 0);
+});
+

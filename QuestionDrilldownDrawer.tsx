@@ -165,7 +165,7 @@ export const QuestionDrilldownDrawer: React.FC<QuestionDrilldownDrawerProps> = (
                 </div>
               </div>
 
-              <div className="flex-1 divide-y divide-slate-100 overflow-y-auto">
+              <div className="flex-1 divide-y divide-[var(--border-subtle)] overflow-y-auto">
                 {filteredQuestions.map((q) => {
                   const isActive = activeQuestion?.id === q.id;
                   const perfStatus = performanceMap[q.id]?.status || 'pendente';
@@ -174,32 +174,32 @@ export const QuestionDrilldownDrawer: React.FC<QuestionDrilldownDrawerProps> = (
                       key={q.id}
                       type="button"
                       onClick={() => setSelectedQuestionId(q.id)}
-                      className={`w-full px-4 py-3 text-left transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-blue-600 ${
-                        isActive ? 'bg-blue-50/70' : 'bg-white'
+                      className={`w-full px-4 py-3 text-left transition-colors hover:bg-[var(--bg-surface-hover)] focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--brand-primary)] ${
+                        isActive ? 'bg-[var(--brand-primary-soft)]/70' : 'bg-[var(--bg-surface)]'
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-slate-500">
-                        <span className="truncate font-semibold text-slate-700">
+                      <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-[var(--text-muted)]">
+                        <span className="truncate font-semibold text-[var(--text-primary)]">
                           {q.concursoCurto}
                         </span>
-                        <span className="shrink-0 font-mono tabular-nums text-blue-700">
+                        <span className="shrink-0 font-mono tabular-nums text-[var(--brand-primary-ink)]">
                           Q{q.questao} · Pág. {q.paginaPdf}
                         </span>
                       </div>
-                      <p className="mt-1 line-clamp-1 text-xs font-medium text-slate-900">
+                      <p className="mt-1 line-clamp-1 text-xs font-medium text-[var(--text-primary)]">
                         {q.tema}
                       </p>
-                      <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
+                      <div className="mt-1 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
                         <span className="font-mono">{q.codigoPrograma}</span>
                         <span
                           className={
                             perfStatus === 'acerto'
-                              ? 'font-medium text-emerald-700'
+                              ? 'font-medium text-[var(--status-success)]'
                               : perfStatus === 'erro'
-                                ? 'font-medium text-red-700'
+                                ? 'font-medium text-[var(--status-error)]'
                                 : perfStatus === 'revisar'
-                                  ? 'font-medium text-amber-700'
-                                  : 'text-slate-400'
+                                  ? 'font-medium text-[var(--status-warning)]'
+                                  : 'text-[var(--text-muted)]'
                           }
                         >
                           {perfStatus === 'acerto'
@@ -219,19 +219,19 @@ export const QuestionDrilldownDrawer: React.FC<QuestionDrilldownDrawerProps> = (
           )}
 
           {/* Dossier Pane */}
-          <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6">
+          <div className="flex-1 overflow-y-auto bg-[var(--bg-canvas)]/70 p-6">
             {activeQuestion ? (
               <div className="space-y-5">
                 {/* Traceability Header */}
-                <div className="rounded-lg border border-slate-200 bg-white p-5">
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    <span className="font-semibold text-slate-800">
+                <div className="ui-card p-5">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+                    <span className="font-semibold text-[var(--text-primary)]">
                       {activeQuestion.prova}
                     </span>
                     <span aria-hidden="true">·</span>
                     <span className="font-mono">{activeQuestion.banca}</span>
                     <span aria-hidden="true">·</span>
-                    <span className="font-mono font-semibold text-blue-700 tabular-nums">
+                    <span className="font-mono font-semibold text-[var(--brand-primary-ink)] tabular-nums">
                       Questão {activeQuestion.questao}
                     </span>
                     <span aria-hidden="true">·</span>
@@ -240,68 +240,68 @@ export const QuestionDrilldownDrawer: React.FC<QuestionDrilldownDrawerProps> = (
                     </span>
                   </div>
 
-                  <h3 className="mt-2.5 text-base font-semibold text-slate-900">
+                  <h3 className="mt-2.5 text-base font-semibold text-[var(--text-primary)]">
                     {activeQuestion.tema}
                   </h3>
 
-                  <div className="mt-3 border-t border-slate-100 pt-3">
-                    <div className="text-[11px] font-medium text-slate-500">
+                  <div className="mt-3 border-t border-[var(--border-subtle)] pt-3">
+                    <div className="text-[11px] font-medium text-[var(--text-muted)]">
                       O que a questão exigiu
                     </div>
-                    <p className="mt-1 text-sm leading-relaxed text-slate-800">
+                    <p className="mt-1 text-sm leading-relaxed text-[var(--text-primary)]">
                       {activeQuestion.exigencia}
                     </p>
                   </div>
                 </div>
 
                 {/* Verifiable Origin Table */}
-                <div className="rounded-lg border border-slate-200 bg-white p-5">
-                  <h4 className="text-xs font-semibold text-slate-900">
+                <div className="ui-card p-5">
+                  <h4 className="text-xs font-semibold text-[var(--text-primary)]">
                     Rastreabilidade Documental e Vínculo com o Edital
                   </h4>
 
-                  <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 border-t border-slate-100 pt-3 text-xs sm:grid-cols-2">
+                  <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 border-t border-[var(--border-subtle)] pt-3 text-xs sm:grid-cols-2">
                     <div>
-                      <dt className="text-slate-500">Arquivo PDF de origem</dt>
-                      <dd className="mt-0.5 break-all font-mono font-medium text-slate-900">
+                      <dt className="text-[var(--text-muted)]">Arquivo PDF de origem</dt>
+                      <dd className="mt-0.5 break-all font-mono font-medium text-[var(--text-primary)]">
                         {activeQuestion.arquivoOrigem}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-slate-500">Localização exata</dt>
-                      <dd className="mt-0.5 font-mono font-medium text-slate-900 tabular-nums">
+                      <dt className="text-[var(--text-muted)]">Localização exata</dt>
+                      <dd className="mt-0.5 font-mono font-medium text-[var(--text-primary)] tabular-nums">
                         Questão {activeQuestion.questao} — Página {activeQuestion.paginaPdf}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-slate-500">Código do programa (principal)</dt>
-                      <dd className="mt-0.5 font-mono font-semibold text-blue-700">
+                      <dt className="text-[var(--text-muted)]">Código do programa (principal)</dt>
+                      <dd className="mt-0.5 font-mono font-semibold text-[var(--brand-primary-ink)]">
                         {activeQuestion.codigoPrograma || 'N/D'}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-slate-500">Conteúdo secundário relacionado</dt>
-                      <dd className="mt-0.5 font-mono text-slate-800">
+                      <dt className="text-[var(--text-muted)]">Conteúdo secundário relacionado</dt>
+                      <dd className="mt-0.5 font-mono text-[var(--text-secondary)]">
                         {activeQuestion.conteudosSecundarios.length > 0
                           ? activeQuestion.conteudosSecundarios.join(', ')
                           : 'Nenhum secundário'}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-slate-500">Vínculo com o edital</dt>
+                      <dt className="text-[var(--text-muted)]">Vínculo com o edital</dt>
                       <dd
                         className={`mt-0.5 font-semibold ${
                           activeQuestion.vinculo === 'Direto'
-                            ? 'text-emerald-700'
-                            : 'text-amber-700'
+                            ? 'text-[var(--status-success)]'
+                            : 'text-[var(--status-warning)]'
                         }`}
                       >
                         {activeQuestion.vinculo}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-slate-500">Área original / Grupo Pareto</dt>
-                      <dd className="mt-0.5 text-slate-800">
+                      <dt className="text-[var(--text-muted)]">Área original / Grupo Pareto</dt>
+                      <dd className="mt-0.5 text-[var(--text-secondary)]">
                         {activeQuestion.areaOriginal} · {activeQuestion.grupoEstudo}
                       </dd>
                     </div>
@@ -309,18 +309,18 @@ export const QuestionDrilldownDrawer: React.FC<QuestionDrilldownDrawerProps> = (
 
                   {(activeQuestion.observacaoAnalise ||
                     activeQuestion.observacaoClassificacao) && (
-                    <div className="mt-3 border-t border-slate-100 pt-3 text-xs">
-                      <span className="font-medium text-slate-600">
+                    <div className="mt-3 border-t border-[var(--border-subtle)] pt-3 text-xs">
+                      <span className="font-medium text-[var(--text-secondary)]">
                         Observação da análise:{' '}
                       </span>
-                      <span className="text-slate-700">
+                      <span className="text-[var(--text-primary)]">
                         {activeQuestion.observacaoAnalise ||
                           activeQuestion.observacaoClassificacao}
                       </span>
                     </div>
                   )}
 
-                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border-subtle)] pt-3">
                     <button
                       type="button"
                       onClick={() =>
@@ -354,13 +354,13 @@ export const QuestionDrilldownDrawer: React.FC<QuestionDrilldownDrawerProps> = (
                   </div>
 
                   {pdfNoticeId === activeQuestion.id && (
-                    <div className="mt-3 rounded-md border border-blue-200 bg-blue-50/60 p-3 text-xs text-slate-700">
+                    <div className="mt-3 rounded-lg border border-[var(--status-info-border)] bg-[var(--status-info-bg)] p-3 text-xs text-[var(--text-secondary)]">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="font-semibold text-blue-900">
+                        <p className="font-semibold text-[var(--brand-navy)]">
                           Guia de abertura direta do caderno original
                         </p>
                         {onAttachPdf && (
-                          <label className="cursor-pointer rounded border border-blue-200 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-50">
+                          <label className="ui-btn-secondary cursor-pointer !min-h-[30px] !px-2.5 !py-1 text-[11px] text-[var(--brand-primary-ink)]">
                             {attachedPdfs[activeQuestion.arquivoOrigem]
                               ? 'Trocar PDF'
                               : 'Anexar este PDF'}
@@ -383,15 +383,15 @@ export const QuestionDrilldownDrawer: React.FC<QuestionDrilldownDrawerProps> = (
                       </div>
                       <p className="mt-1">
                         Arquivo:{' '}
-                        <span className="font-mono font-medium text-slate-900">
+                        <span className="font-mono font-medium text-[var(--text-primary)]">
                           {activeQuestion.arquivoOrigem}
                         </span>{' '}
                         · Página{' '}
-                        <span className="font-mono font-semibold text-blue-800">
+                        <span className="font-mono font-semibold text-[var(--brand-primary-ink)]">
                           {activeQuestion.paginaPdf}
                         </span>{' '}
                         (Questão{' '}
-                        <span className="font-mono font-semibold text-blue-800">
+                        <span className="font-mono font-semibold text-[var(--brand-primary-ink)]">
                           {activeQuestion.questao}
                         </span>
                         ).
@@ -400,10 +400,10 @@ export const QuestionDrilldownDrawer: React.FC<QuestionDrilldownDrawerProps> = (
                         <iframe
                           src={`${attachedPdfs[activeQuestion.arquivoOrigem]}#page=${activeQuestion.paginaPdf}`}
                           title={`${activeQuestion.arquivoOrigem} página ${activeQuestion.paginaPdf}`}
-                          className="mt-2.5 h-80 w-full rounded border border-slate-200 bg-white"
+                          className="mt-2.5 h-80 w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
                         />
                       ) : (
-                        <p className="mt-1 text-[11px] text-slate-600">
+                        <p className="mt-1 text-[11px] text-[var(--text-secondary)]">
                           Use <span className="font-mono">#page={activeQuestion.paginaPdf}</span> ao
                           abrir o PDF localmente ou anexe o arquivo acima para abrir direto na página{' '}
                           <span className="font-mono">{activeQuestion.paginaPdf}</span>.
@@ -414,13 +414,13 @@ export const QuestionDrilldownDrawer: React.FC<QuestionDrilldownDrawerProps> = (
                 </div>
 
                 {/* Personal Study & Performance Tracker */}
-                <div className="rounded-lg border border-slate-200 bg-white p-5">
+                <div className="ui-card p-5">
                   <div className="flex items-center justify-between">
-                    <h4 className="flex items-center gap-1.5 text-xs font-semibold text-slate-900">
-                      <BookOpen className="h-3.5 w-3.5 text-slate-500" />
+                    <h4 className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-primary)]">
+                      <BookOpen className="h-3.5 w-3.5 text-[var(--text-muted)]" />
                       Registro de Desempenho e Revisão
                     </h4>
-                    <span className="text-[11px] text-slate-400">
+                    <span className="text-[11px] text-[var(--text-muted)]">
                       Salvo automaticamente
                     </span>
                   </div>
@@ -504,11 +504,11 @@ export const QuestionDrilldownDrawer: React.FC<QuestionDrilldownDrawerProps> = (
                 </div>
               </div>
             ) : (
-              <div className="flex h-full flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center">
-                <p className="text-sm font-medium text-slate-700">
+              <div className="ui-card flex h-full flex-col items-center justify-center border-dashed p-8 text-center">
+                <p className="text-sm font-medium text-[var(--text-primary)]">
                   Selecione uma questão à esquerda para abrir o dossiê completo
                 </p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
                   Cada item mostra prova, número exato, página do PDF, código do edital e registro de estudo.
                 </p>
               </div>

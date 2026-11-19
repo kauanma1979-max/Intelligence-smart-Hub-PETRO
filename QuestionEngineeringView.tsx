@@ -10,6 +10,7 @@ import {
   buildDistractorRadar,
   DISTRACTOR_MECHANISMS,
 } from '../utils/examIntelligence';
+import { HorizontalFrequencyBarChart } from './DataVizCharts';
 
 interface QuestionEngineeringViewProps {
   questions: QuestionRecord[];
@@ -311,6 +312,43 @@ export const QuestionEngineeringView: React.FC<QuestionEngineeringViewProps> = (
             </div>
           </div>
 
+          {/* 8 Mechanisms Incidence Chart */}
+          <HorizontalFrequencyBarChart
+            title="Incidência dos 8 Mecanismos de Distratores na Base"
+            subtitle="Clique em qualquer mecanismo para abrir todas as questões candidatas identificadas."
+            maxItems={8}
+            items={[...filteredRadar]
+              .sort((a, b) => b.questoesFiltradas.length - a.questoesFiltradas.length)
+              .map((row, idx) => ({
+                id: row.mecanismo,
+                label: row.label,
+                sublabel: row.descricao,
+                value: row.questoesFiltradas.length,
+                pct:
+                  questions.length > 0
+                    ? (row.questoesFiltradas.length / questions.length) * 100
+                    : 0,
+                color:
+                  idx === 0
+                    ? '#14213D'
+                    : idx < 3
+                      ? '#2563EB'
+                      : idx < 6
+                        ? '#4338CA'
+                        : '#06B6D4',
+                questions: row.questoesFiltradas,
+              }))}
+            onSelectBar={(item) => {
+              if (item.questions && item.questions.length > 0) {
+                onInspectQuestions(
+                  `Mecanismo: ${item.label}`,
+                  `${item.questions.length} questões candidatas identificadas`,
+                  item.questions
+                );
+              }
+            }}
+          />
+
           {/* 8 Mechanisms Grid */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {filteredRadar.map((row) => (
@@ -369,7 +407,7 @@ export const QuestionEngineeringView: React.FC<QuestionEngineeringViewProps> = (
                         row.questoesFiltradas
                       )
                     }
-                    className="min-h-[34px] font-semibold text-[var(--brand-primary-ink)] hover:underline disabled:text-slate-300 whitespace-nowrap"
+                    className="min-h-[34px] font-semibold text-[var(--brand-primary-ink)] hover:underline disabled:text-[var(--text-muted)]/50 whitespace-nowrap"
                   >
                     Ver todas as {row.questoesFiltradas.length} questões →
                   </button>

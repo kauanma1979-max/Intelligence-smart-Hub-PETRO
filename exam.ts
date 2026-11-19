@@ -447,3 +447,51 @@ export interface BackupRestoreResult {
   skippedOrphans: number;
   exportedAt: string;
 }
+
+// Knowledge Atlas & Dynamic BI Visualization Types (Real Data Only)
+export interface KnowledgeAtlasNode {
+  id: string;
+  level: 0 | 1 | 2 | 3 | 4;
+  label: string;
+  code?: string;
+  status: GapStatus;
+  questionCount: number;
+  otherExamCount: number;
+  directCount: number;
+  correlatoCount: number;
+  exams: string[];
+  questionRefs: string[];
+  questions: QuestionRecord[];
+  otherExamQuestions: QuestionRecord[];
+  recommendation?: string;
+  parentId?: string;
+  children: KnowledgeAtlasNode[];
+}
+
+export interface KnowledgeAtlasData {
+  root: KnowledgeAtlasNode;
+  nodeMap: Record<string, KnowledgeAtlasNode>;
+  disciplines: string[];
+  bancas: string[];
+  provas: string[];
+}
+
+export interface HeatmapMatrixCell {
+  exam: string;
+  count: number;
+  pct: number;
+  questions: QuestionRecord[];
+}
+
+export interface HeatmapMatrixRow {
+  topic: string;
+  total: number;
+  cells: HeatmapMatrixCell[];
+}
+
+export interface HeatmapMatrixData {
+  exams: string[];
+  rows: HeatmapMatrixRow[];
+  maxCellCount: number;
+}
+

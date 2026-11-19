@@ -24,6 +24,7 @@ import {
   generateCustomSimulado,
   getAvailableEditalScopes,
 } from '../utils/examIntelligence';
+import { HorizontalFrequencyBarChart } from './DataVizCharts';
 
 interface StudyPlannerSimuladoViewProps {
   questions: QuestionRecord[];
@@ -301,6 +302,37 @@ export const StudyPlannerSimuladoView: React.FC<StudyPlannerSimuladoViewProps> =
               </div>
             </div>
           </div>
+
+          {/* Priority Ranking Chart */}
+          <HorizontalFrequencyBarChart
+            title="Índice de Prioridade por Bloco de Estudo"
+            subtitle="Combina Pareto 80/20, peso no edital selecionado e histórico de acertos/erros. Clique em um bloco para abrir suas questões."
+            valueUnit=" pts"
+            maxItems={10}
+            items={planBlocks.map((b) => ({
+              id: b.grupo,
+              label: b.grupo,
+              sublabel: `${b.concentracaoHistoricaPct.toFixed(1)}% da amostra (${b.frequenciaHistorica}q) · ${b.errosCount} erro(s) · ${b.questoesNaoResolvidasCount} pendente(s)`,
+              value: Math.round(b.scorePrioridade),
+              color:
+                b.prioridade === 'alta'
+                  ? '#DC2626'
+                  : b.prioridade === 'media'
+                    ? '#D97706'
+                    : '#059669',
+              questions: b.questoesDoBloco,
+            }))}
+            onSelectBar={(item) => {
+              const block = planBlocks.find((b) => b.grupo === item.id);
+              if (block) {
+                onInspectQuestions(
+                  `Bloco de estudo: ${block.grupo}`,
+                  block.justificativa,
+                  block.questoesDoBloco
+                );
+              }
+            }}
+          />
 
           {/* Study Plan Blocks */}
           <div className="space-y-4">
