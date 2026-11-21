@@ -130,7 +130,17 @@ export const OverviewParetoView: React.FC<OverviewParetoViewProps> = ({
 
       {/* 4-column KPI Strip */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="ui-card p-4 sm:p-5">
+        <button
+          type="button"
+          onClick={() =>
+            onInspectQuestions(
+              'Todas as questões rastreadas',
+              `${total} questões integradas em ${exams.length} cadernos`,
+              questions
+            )
+          }
+          className="ui-card p-4 text-left transition-colors hover:bg-[var(--bg-surface-hover)] sm:p-5"
+        >
           <div className="text-xs font-medium text-[var(--text-muted)]">
             Total de questões rastreadas
           </div>
@@ -140,9 +150,19 @@ export const OverviewParetoView: React.FC<OverviewParetoViewProps> = ({
           <div className="mt-1 text-xs text-[var(--text-muted)] tabular-nums">
             {exams.length} cadernos distintos integrados
           </div>
-        </div>
+        </button>
 
-        <div className="ui-card p-4 sm:p-5">
+        <button
+          type="button"
+          onClick={() =>
+            onInspectQuestions(
+              'Núcleo Vital (Pareto 80/20)',
+              `${core80Rows.length} grupos · ${core80Count} questões (${core80Pct.toFixed(1)}% da base)`,
+              coreQuestions
+            )
+          }
+          className="ui-card p-4 text-left transition-colors hover:bg-[var(--bg-surface-hover)] sm:p-5"
+        >
           <div className="text-xs font-medium text-[var(--text-muted)]">
             Núcleo vital (Pareto 80/20)
           </div>
@@ -152,9 +172,19 @@ export const OverviewParetoView: React.FC<OverviewParetoViewProps> = ({
           <div className="mt-1 text-xs text-[var(--text-muted)] tabular-nums">
             {core80Count} questões ({core80Pct.toFixed(1)}% da base)
           </div>
-        </div>
+        </button>
 
-        <div className="ui-card p-4 sm:p-5">
+        <button
+          type="button"
+          onClick={() =>
+            onInspectQuestions(
+              'Grupos Complementares (20%)',
+              `${paretoRows.length - core80Rows.length} grupos · ${total - core80Count} questões`,
+              compQuestions
+            )
+          }
+          className="ui-card p-4 text-left transition-colors hover:bg-[var(--bg-surface-hover)] sm:p-5"
+        >
           <div className="text-xs font-medium text-[var(--text-muted)]">
             Grupos complementares
           </div>
@@ -164,9 +194,19 @@ export const OverviewParetoView: React.FC<OverviewParetoViewProps> = ({
           <div className="mt-1 text-xs text-[var(--text-muted)] tabular-nums">
             {total - core80Count} questões ({(100 - core80Pct).toFixed(1)}% da base)
           </div>
-        </div>
+        </button>
 
-        <div className="ui-card p-4 sm:p-5">
+        <button
+          type="button"
+          onClick={() =>
+            onInspectQuestions(
+              'Vínculo Direto com Edital',
+              `${directCount} diretas (${directPct.toFixed(1)}%)`,
+              directQuestions
+            )
+          }
+          className="ui-card p-4 text-left transition-colors hover:bg-[var(--bg-surface-hover)] sm:p-5"
+        >
           <div className="text-xs font-medium text-[var(--text-muted)]">
             Vínculo direto com edital
           </div>
@@ -176,7 +216,7 @@ export const OverviewParetoView: React.FC<OverviewParetoViewProps> = ({
           <div className="mt-1 text-xs text-[var(--text-muted)] tabular-nums">
             {directCount} diretas · {total - directCount} correlatas
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Interactive Pareto Chart */}
@@ -365,14 +405,37 @@ export const OverviewParetoView: React.FC<OverviewParetoViewProps> = ({
                   <td className="px-3 py-3 text-right font-mono font-semibold text-[var(--brand-accent)] tabular-nums">
                     {row.acumulado.toFixed(1)}%
                   </td>
-                  {shortExamColumns.map((col) => (
-                    <td
-                      key={`${row.grupo}-${col}`}
-                      className="px-2.5 py-3 text-right font-mono text-[var(--text-muted)] tabular-nums"
-                    >
-                      {row.porConcurso[col] || 0}
-                    </td>
-                  ))}
+                  {shortExamColumns.map((col) => {
+                    const cellCount = row.porConcurso[col] || 0;
+                    const cellQuestions =
+                      cellCount > 0
+                        ? row.questoes.filter((q) => q.concursoCurto === col)
+                        : [];
+                    return (
+                      <td
+                        key={`${row.grupo}-${col}`}
+                        className="px-2.5 py-3 text-right font-mono text-[var(--text-muted)] tabular-nums"
+                      >
+                        {cellCount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onInspectQuestions(
+                                `${row.grupo} — ${col}`,
+                                `${cellQuestions.length} questão(ões) nesta prova`,
+                                cellQuestions
+                              )
+                            }
+                            className="inline-flex min-h-[28px] min-w-[28px] items-center justify-end rounded px-1.5 font-semibold text-[var(--brand-primary-ink)] hover:bg-[var(--brand-primary-soft)] hover:underline"
+                          >
+                            {cellCount}
+                          </button>
+                        ) : (
+                          <span>0</span>
+                        )}
+                      </td>
+                    );
+                  })}
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button
                       type="button"

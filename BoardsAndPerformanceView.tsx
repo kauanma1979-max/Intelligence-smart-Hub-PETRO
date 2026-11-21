@@ -38,6 +38,8 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
         banca: string;
         totalQuestoes: number;
         maxPage: number;
+        specificPdfPath?: string;
+        specificPdfTotalPages?: number;
         questoes: QuestionRecord[];
       }
     >();
@@ -50,11 +52,19 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
         banca: q.banca,
         totalQuestoes: 0,
         maxPage: 0,
+        specificPdfPath: q.specificPdfPath,
+        specificPdfTotalPages: q.specificPdfTotalPages,
         questoes: [],
       };
       entry.provas.add(q.concursoCurto);
       entry.totalQuestoes++;
       entry.maxPage = Math.max(entry.maxPage, q.paginaPdf);
+      if (!entry.specificPdfPath && q.specificPdfPath) {
+        entry.specificPdfPath = q.specificPdfPath;
+      }
+      if (!entry.specificPdfTotalPages && q.specificPdfTotalPages) {
+        entry.specificPdfTotalPages = q.specificPdfTotalPages;
+      }
       entry.questoes.push(q);
       map.set(key, entry);
     }
@@ -451,6 +461,7 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
             <div className="mt-4 divide-y divide-[var(--border-subtle)] rounded-lg border border-[var(--border-subtle)]">
               {pdfCatalog.map((pdf) => {
                 const attachedUrl = attachedPdfs[pdf.filename];
+                const effectiveUrl = attachedUrl || pdf.specificPdfPath;
                 return (
                   <div
                     key={pdf.filename}
@@ -467,15 +478,17 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
                         <span className="text-[var(--text-secondary)]">{pdf.banca}</span>
                       </div>
                       <div className="mt-0.5 text-xs text-[var(--text-muted)]">
-                        {Array.from(pdf.provas).join(', ')} · {pdf.totalQuestoes} questões (até página{' '}
-                        {pdf.maxPage})
+                        {Array.from(pdf.provas).join(', ')} · {pdf.totalQuestoes} questões específicas
+                        {pdf.specificPdfTotalPages
+                          ? ` (${pdf.specificPdfTotalPages} págs. no PDF reduzido · até pág. ${pdf.maxPage} no original)`
+                          : ` (até página ${pdf.maxPage})`}
                       </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
                       <label className="ui-btn-secondary cursor-pointer focus-within:outline-2 focus-within:outline-[var(--focus-ring)] focus-within:outline-offset-2">
                         <Upload className="h-3.5 w-3.5" />
-                        {attachedUrl ? 'Trocar PDF local' : 'Anexar PDF local'}
+                        {attachedUrl ? 'Trocar PDF local' : 'Anexar PDF completo'}
                         <input
                           type="file"
                           accept="application/pdf"
@@ -484,7 +497,7 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
                         />
                       </label>
 
-                      {attachedUrl && (
+                      {effectiveUrl && (
                         <button
                           type="button"
                           onClick={() =>
@@ -492,7 +505,7 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
                           }
                           className="ui-btn-primary"
                         >
-                          Visualizar PDF
+                          {attachedUrl ? 'Visualizar PDF local' : 'Abrir PDF específico'}
                         </button>
                       )}
 
@@ -516,45 +529,58 @@ export const BoardsAndPerformanceView: React.FC<BoardsAndPerformanceViewProps> =
             </div>
           </section>
 
-          {previewPdf && attachedPdfs[previewPdf.filename] && (
-            <section className="ui-card p-4">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-xs font-semibold text-[var(--text-primary)]">
-                  Visualizador: <span className="font-mono">{previewPdf.filename}</span> (Página{' '}
-                  {previewPdf.page})
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="text-xs text-[var(--text-secondary)]">
-                    Ir para página:
-                    <input
-                      type="number"
-                      min={1}
-                      value={previewPdf.page}
-                      onChange={(e) =>
-                        setPreviewPdf({
-                          filename: previewPdf.filename,
-                          page: Math.max(1, Number.parseInt(e.target.value, 10) || 1),
-                        })
-                      }
-                      className="ui-input ml-2 inline-block w-20 font-mono text-xs"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewPdf(null)}
-                    className="ui-btn-secondary"
-                  >
-                    Fechar leitor
-                  </button>
-                </div>
-              </div>
-              <iframe
-                src={`${attachedPdfs[previewPdf.filename]}#page=${previewPdf.page}`}
-                title={`PDF ${previewPdf.filename}`}
-                className="h-[520px] w-full rounded-lg border border-[var(--border-subtle)]"
-              />
-            </section>
-          )}
+          {previewPdf &&
+            (() => {
+              const catalogEntry = pdfCatalog.find((p) => p.filename === previewPdf.filename);
+              const previewSrc =
+                attachedPdfs[previewPdf.filename] || catalogEntry?.specificPdfPath;
+              if (!previewSrc) return null;
+              return (
+                <section className="ui-card p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs font-semibold text-[var(--text-primary)]">
+                      Visualizador:{' '}
+                      <span className="font-mono">{previewPdf.filename}</span> (Página{' '}
+                      {previewPdf.page}
+                      {!attachedPdfs[previewPdf.filename] && catalogEntry?.specificPdfTotalPages
+                        ? ` de ${catalogEntry.specificPdfTotalPages} — somente específicas`
+                        : ''}
+                      )
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="text-xs text-[var(--text-secondary)]">
+                        Ir para página:
+                        <input
+                          type="number"
+                          min={1}
+                          value={previewPdf.page}
+                          onChange={(e) =>
+                            setPreviewPdf({
+                              filename: previewPdf.filename,
+                              page: Math.max(1, Number.parseInt(e.target.value, 10) || 1),
+                            })
+                          }
+                          className="ui-input ml-2 inline-block w-20 font-mono text-xs"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewPdf(null)}
+                        className="ui-btn-secondary"
+                      >
+                        Fechar leitor
+                      </button>
+                    </div>
+                  </div>
+                  <iframe
+                    key={`${previewSrc}-${previewPdf.page}`}
+                    src={`${previewSrc}#page=${previewPdf.page}`}
+                    title={`PDF ${previewPdf.filename}`}
+                    className="h-[520px] w-full rounded-lg border border-[var(--border-subtle)]"
+                  />
+                </section>
+              );
+            })()}
         </div>
       )}
 

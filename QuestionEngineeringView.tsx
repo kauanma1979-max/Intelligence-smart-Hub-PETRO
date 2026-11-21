@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Check, FileText, Search, Upload } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Check, Eye, EyeOff, FileText, Search, Upload } from 'lucide-react';
 import type {
   DistractorMechanism,
   QuestionEngineeringStudy,
@@ -9,6 +9,7 @@ import {
   analyzePastedTextTraps,
   buildDistractorRadar,
   DISTRACTOR_MECHANISMS,
+  getQuestionAnswerKeyInfo,
 } from '../utils/examIntelligence';
 import { HorizontalFrequencyBarChart } from './DataVizCharts';
 
@@ -87,22 +88,46 @@ export const QuestionEngineeringView: React.FC<QuestionEngineeringViewProps> = (
   const [selectedMechanisms, setSelectedMechanisms] = useState<DistractorMechanism[]>([]);
   const [analiseBanca, setAnaliseBanca] = useState('');
   const [savedFeedback, setSavedFeedback] = useState(false);
+  const [revealEditorGabarito, setRevealEditorGabarito] = useState(false);
 
-  const loadQuestionIntoEditor = (q: QuestionRecord) => {
-    setSelectedQuestionId(q.id);
+  const populateFromQuestion = (q: QuestionRecord) => {
     const saved = studiesMap[q.id];
-    setEnunciado(saved?.enunciadoOriginal || '');
-    setAltA(saved?.alternativasOuJulgamento.A || '');
-    setAltB(saved?.alternativasOuJulgamento.B || '');
-    setAltC(saved?.alternativasOuJulgamento.C || '');
-    setAltD(saved?.alternativasOuJulgamento.D || '');
-    setAltE(saved?.alternativasOuJulgamento.E || '');
-    setGabarito(saved?.alternativasOuJulgamento.gabarito || '');
+    const ak = getQuestionAnswerKeyInfo(q);
+    const getAlt = (letter: string) =>
+      q.alternatives?.find((a) => a.label === letter)?.text || '';
+    const defaultEnunciado = [q.contextText, q.statementWithoutNumber || q.questionText]
+      .filter(Boolean)
+      .join('\n\n');
+
+    setEnunciado(saved?.enunciadoOriginal || defaultEnunciado);
+    setAltA(saved?.alternativasOuJulgamento.A || getAlt('A'));
+    setAltB(saved?.alternativasOuJulgamento.B || getAlt('B'));
+    setAltC(saved?.alternativasOuJulgamento.C || getAlt('C'));
+    setAltD(saved?.alternativasOuJulgamento.D || getAlt('D'));
+    setAltE(saved?.alternativasOuJulgamento.E || getAlt('E'));
+    setGabarito(
+      saved?.alternativasOuJulgamento.gabarito ||
+        (ak.isAnnulled ? 'ANULADA' : ak.expectedChoiceValue || '')
+    );
     setCebraspeTwist(
       saved?.alternativasOuJulgamento.alteracaoConceitualCebraspe || ''
     );
     setSelectedMechanisms(saved?.mecanismos || []);
     setAnaliseBanca(saved?.analiseBanca || '');
+  };
+
+  useEffect(() => {
+    if (activeQuestion) {
+      populateFromQuestion(activeQuestion);
+      setRevealEditorGabarito(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeQuestion?.id]);
+
+  const loadQuestionIntoEditor = (q: QuestionRecord) => {
+    setSelectedQuestionId(q.id);
+    populateFromQuestion(q);
+    setRevealEditorGabarito(false);
     setSavedFeedback(false);
   };
 
@@ -238,9 +263,9 @@ export const QuestionEngineeringView: React.FC<QuestionEngineeringViewProps> = (
           {/* Honesty / PDF Requirement Notice */}
           <div className="rounded-xl border border-[var(--status-info-border)] bg-[var(--status-info-bg)] p-4 text-xs text-[var(--text-secondary)]">
             <span className="font-semibold text-[var(--brand-primary-ink)]">
-              Nota de integridade documental:{' '}
+              Base integrada com enunciados e gabaritos:{' '}
             </span>
-            as planilhas resumidas contêm a exigência central de cada item, mas não armazenam as cinco alternativas (A–E) nem o texto literal completo das afirmações. Abaixo estão as questões candidatas por mecanismo na base atual — abra qualquer item no{' '}
+            todas as 270 questões já estão enriquecidas com enunciados extraídos, alternativas (A–E ou julgamento CEBRASPE) e status do gabarito (definitivo, alterado pós-recurso, preliminar ou anulada). Abra qualquer item no{' '}
             <button
               type="button"
               onClick={() => setSubTab('disseccao')}
@@ -248,7 +273,7 @@ export const QuestionEngineeringView: React.FC<QuestionEngineeringViewProps> = (
             >
               Laboratório de Dissecação
             </button>{' '}
-            com o PDF original anexado para auditar distratores alternativa por alternativa.
+            para auditar distratores e consultar figuras nos PDFs originais.
           </div>
 
           {/* Preset Thematic Queries */}
@@ -485,6 +510,51 @@ export const QuestionEngineeringView: React.FC<QuestionEngineeringViewProps> = (
                       </span>
                       <span aria-hidden="true">·</span>
                       <span className="font-mono">{activeQuestion.banca}</span>
+                      {(() => {
+                        const ak = getQuestionAnswerKeyInfo(activeQuestion);
+                        if (!ak.hasOfficialKey) return null;
+                        return (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <button
+                              type="button"
+                              onClick={() => setRevealEditorGabarito((v) => !v)}
+                              aria-label={
+                                revealEditorGabarito
+                                  ? 'Ocultar gabarito'
+                                  : 'Exibir gabarito'
+                              }
+                              title={
+                                revealEditorGabarito
+                                  ? 'Ocultar gabarito'
+                                  : 'Exibir gabarito'
+                              }
+                              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold transition-colors ${
+                                revealEditorGabarito
+                                  ? ak.isAnnulled
+                                    ? 'bg-[var(--status-error-bg)] text-[var(--status-error)]'
+                                    : ak.isPreliminary
+                                      ? 'bg-[var(--status-warning-bg)] text-[var(--status-warning)]'
+                                      : 'bg-[var(--status-success-bg)] text-[var(--status-success)]'
+                                  : 'border border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary-ink)]'
+                              }`}
+                            >
+                              {revealEditorGabarito ? (
+                                <>
+                                  <EyeOff className="h-3 w-3" />
+                                  <span>
+                                    {ak.isAnnulled
+                                      ? 'ANULADA'
+                                      : `Gabarito: ${ak.shortAnswerLabel} · ${ak.statusBadgeLabel}`}
+                                  </span>
+                                </>
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          </>
+                        );
+                      })()}
                     </div>
                     <h2 className="mt-1 text-base font-bold text-[var(--text-primary)]">
                       {activeQuestion.tema}
@@ -516,13 +586,19 @@ export const QuestionEngineeringView: React.FC<QuestionEngineeringViewProps> = (
                   </label>
                 </div>
 
-                {attachedPdfs[activeQuestion.arquivoOrigem] && (
+                {attachedPdfs[activeQuestion.arquivoOrigem] ? (
                   <iframe
                     src={`${attachedPdfs[activeQuestion.arquivoOrigem]}#page=${activeQuestion.paginaPdf}`}
                     title={`${activeQuestion.arquivoOrigem} página ${activeQuestion.paginaPdf}`}
                     className="h-64 w-full rounded-lg border border-[var(--border-subtle)]"
                   />
-                )}
+                ) : activeQuestion.specificPdfPath ? (
+                  <iframe
+                    src={`${activeQuestion.specificPdfPath}#page=${activeQuestion.specificPdfPage ?? 1}`}
+                    title={`${activeQuestion.prova} específicas página ${activeQuestion.specificPdfPage ?? 1}`}
+                    className="h-64 w-full rounded-lg border border-[var(--border-subtle)]"
+                  />
+                ) : null}
 
                 <div>
                   <label
@@ -544,22 +620,60 @@ export const QuestionEngineeringView: React.FC<QuestionEngineeringViewProps> = (
                 {activeQuestion.banca.toUpperCase().includes('CEBRASPE') ? (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                     <div>
-                      <label
-                        htmlFor="eng-gab-ceb"
-                        className="block text-xs font-medium text-[var(--text-secondary)]"
-                      >
-                        Gabarito oficial
-                      </label>
-                      <select
-                        id="eng-gab-ceb"
-                        value={gabarito}
-                        onChange={(e) => setGabarito(e.target.value)}
-                        className="ui-select mt-1"
-                      >
-                        <option value="">Selecionar</option>
-                        <option value="Certo">Certo</option>
-                        <option value="Errado">Errado</option>
-                      </select>
+                      <div className="flex items-center justify-between gap-2">
+                        <label
+                          htmlFor="eng-gab-ceb"
+                          className="block text-xs font-medium text-[var(--text-secondary)]"
+                        >
+                          Gabarito oficial
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setRevealEditorGabarito((v) => !v)}
+                          aria-label={
+                            revealEditorGabarito ? 'Ocultar gabarito' : 'Exibir gabarito'
+                          }
+                          title={
+                            revealEditorGabarito ? 'Ocultar gabarito' : 'Exibir gabarito'
+                          }
+                          className="inline-flex h-6 w-6 items-center justify-center rounded border border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary-ink)]"
+                        >
+                          {revealEditorGabarito ? (
+                            <EyeOff className="h-3.5 w-3.5" />
+                          ) : (
+                            <Eye className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
+                      {revealEditorGabarito ? (
+                        <select
+                          id="eng-gab-ceb"
+                          value={gabarito}
+                          disabled={Boolean(activeQuestion.isAnnulled)}
+                          onChange={(e) => setGabarito(e.target.value)}
+                          className="ui-select mt-1 disabled:opacity-60"
+                        >
+                          {activeQuestion.isAnnulled ? (
+                            <option value="ANULADA">ANULADA</option>
+                          ) : (
+                            <>
+                              <option value="">Selecionar</option>
+                              <option value="Certo">Certo</option>
+                              <option value="Errado">Errado</option>
+                            </>
+                          )}
+                        </select>
+                      ) : (
+                        <button
+                          type="button"
+                          id="eng-gab-ceb"
+                          onClick={() => setRevealEditorGabarito(true)}
+                          className="mt-1 flex min-h-[38px] w-full items-center justify-between rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] px-3 text-xs text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary-ink)]"
+                        >
+                          <span>Gabarito oculto</span>
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                     <div className="sm:col-span-3">
                       <label
@@ -605,19 +719,57 @@ export const QuestionEngineeringView: React.FC<QuestionEngineeringViewProps> = (
                           className="ui-input"
                         />
                       ))}
-                      <select
-                        aria-label="Gabarito CESGRANRIO"
-                        value={gabarito}
-                        onChange={(e) => setGabarito(e.target.value)}
-                        className="ui-select"
-                      >
-                        <option value="">Gabarito oficial (A–E)</option>
-                        {['A', 'B', 'C', 'D', 'E'].map((l) => (
-                          <option key={l} value={l}>
-                            Alternativa {l}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-2">
+                        {revealEditorGabarito ? (
+                          <select
+                            aria-label="Gabarito CESGRANRIO"
+                            value={gabarito}
+                            disabled={Boolean(activeQuestion.isAnnulled)}
+                            onChange={(e) => setGabarito(e.target.value)}
+                            className="ui-select flex-1 disabled:opacity-60"
+                          >
+                            {activeQuestion.isAnnulled ? (
+                              <option value="ANULADA">ANULADA</option>
+                            ) : (
+                              <>
+                                <option value="">Gabarito oficial (A–E)</option>
+                                {['A', 'B', 'C', 'D', 'E'].map((l) => (
+                                  <option key={l} value={l}>
+                                    Alternativa {l}
+                                  </option>
+                                ))}
+                              </>
+                            )}
+                          </select>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setRevealEditorGabarito(true)}
+                            aria-label="Exibir gabarito CESGRANRIO"
+                            className="flex min-h-[38px] flex-1 items-center justify-between rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] px-3 text-xs text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary-ink)]"
+                          >
+                            <span>Gabarito oculto</span>
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setRevealEditorGabarito((v) => !v)}
+                          aria-label={
+                            revealEditorGabarito ? 'Ocultar gabarito' : 'Exibir gabarito'
+                          }
+                          title={
+                            revealEditorGabarito ? 'Ocultar gabarito' : 'Exibir gabarito'
+                          }
+                          className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary-ink)]"
+                        >
+                          {revealEditorGabarito ? (
+                            <EyeOff className="h-3.5 w-3.5" />
+                          ) : (
+                            <Eye className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

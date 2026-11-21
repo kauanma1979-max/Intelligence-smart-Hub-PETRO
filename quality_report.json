@@ -1,0 +1,63 @@
+{
+  "question_records": 270,
+  "exam_records": 5,
+  "question_images_created": 270,
+  "question_images_total_bytes": 9670300,
+  "question_images_avg_bytes": 35816,
+  "unique_app_lookup_keys": 270,
+  "unique_question_ids": 270,
+  "missing_question_images": 0,
+  "questions_missing_bbox": 0,
+  "only_specific_questions": true,
+  "basic_question_ranges_excluded": {
+    "TRANSPETRO_2018_OPERACAO": [
+      1,
+      20
+    ],
+    "PETROBRAS_2023_1_OPERACAO": [
+      1,
+      40
+    ],
+    "PETROBRAS_2023_2_OPERACAO": [
+      1,
+      40
+    ],
+    "TRANSPETRO_2023_1_DUTOS_TERMINAIS": [
+      1,
+      20
+    ],
+    "ANSA_2026_OPERACAO": [
+      1,
+      30
+    ]
+  },
+  "created_at_utc": "2026-11-19T23:42:34.483594+00:00",
+  "manual_layout_corrections": [
+    {
+      "exam_id": "TRANSPETRO_2023_1_DUTOS_TERMINAIS",
+      "question_number": 39,
+      "original_pdf_page": 12,
+      "reason": "Question uses full page width; corrected crop so context, diagram, data and alternatives are not clipped."
+    },
+    {
+      "exam_id": "TRANSPETRO_2023_1_DUTOS_TERMINAIS",
+      "question_number": 40,
+      "original_pdf_page": 12,
+      "reason": "Question uses full page width; corrected crop so context, diagram, data and alternatives are not clipped."
+    },
+    {
+      "exam_id": "TRANSPETRO_2023_1_DUTOS_TERMINAIS",
+      "question_number": 47,
+      "original_pdf_page": 14,
+      "reason": "Question uses full page width; corrected crop so context, diagram, data and alternatives are not clipped."
+    },
+    {
+      "exam_id": "TRANSPETRO_2023_1_DUTOS_TERMINAIS",
+      "question_number": 48,
+      "original_pdf_page": 14,
+      "reason": "Question uses full page width; corrected crop so context, diagram, data and alternatives are not clipped."
+    }
+  ],
+  "questions_with_corrected_full_width_crops": 4,
+  "updated_at_utc": "2026-11-19T23:46:36.161321+00:00"
+}

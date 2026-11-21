@@ -24,6 +24,7 @@ export interface StudentAttemptRecord {
   minhaResposta: string;
   gabarito: string;
   status: Exclude<PerformanceStatus, 'pendente'>;
+  source?: 'original_bank' | 'manual' | 'simulado' | 'drawer';
   timeSeconds?: number;
   confianca: ConfidenceLevel;
   dificuldade: PerceivedDifficulty;
@@ -33,8 +34,244 @@ export interface StudentAttemptRecord {
 }
 
 
+export type AnswerKeyStatus =
+  | 'official_final'
+  | 'official_adjusted'
+  | 'official_final_adjusted'
+  | 'official_preliminary'
+  | 'annulled';
+
+export interface QuestionAlternative {
+  label: string;
+  text: string;
+}
+
+export interface QuestionAnswerKey {
+  value: string | null;
+  displayValue: string;
+  status: AnswerKeyStatus;
+  statusLabel: string;
+  questionType: 'multiple_choice' | 'true_false';
+  sourcePdf: string;
+  sourcePage: number;
+  sourceNote?: string;
+  previousValue?: string;
+  adjustmentNote?: string;
+  sourceAdjustmentPage?: number;
+  originalMark?: string;
+}
+
+export interface RawQuestionBankItem {
+  question_id: string;
+  app_lookup_key: string;
+  exam_id: string;
+  exam_name: string;
+  company?: string;
+  year?: number;
+  bank?: string;
+  emphasis?: string;
+  question_number: number;
+  question_type?: 'multiple_choice' | 'true_false';
+  pdf_page?: number;
+  page_as_listed_in_analysis_csv?: number;
+  page_number_corrected?: boolean;
+  source_pdf?: string;
+  context_text?: string;
+  question_text?: string;
+  display_text?: string;
+  statement_without_number?: string;
+  alternatives?: QuestionAlternative[];
+  visual_reference?: {
+    may_need_pdf_figure?: boolean;
+    pdf_page_bbox_points?: number[];
+  };
+  answer_key?: {
+    value: string | null;
+    display_value: string;
+    status: AnswerKeyStatus;
+    status_label: string;
+    question_type: 'multiple_choice' | 'true_false';
+    source_pdf: string;
+    source_page: number;
+    source_note?: string;
+    previous_value?: string;
+    adjustment_note?: string;
+    source_adjustment_page?: number;
+    original_mark?: string;
+  };
+  correct_answer?: string | null;
+  correct_option_label?: string | null;
+  correct_option_text?: string | null;
+  correct_judgment?: 'CERTO' | 'ERRADO' | null;
+  answer_key_status?: AnswerKeyStatus;
+  answer_key_source_pdf?: string;
+  answer_key_source_page?: number;
+}
+
+export interface RawQuestionBankPayload {
+  schema_name?: string;
+  schema_version?: string;
+  dataset_id?: string;
+  record_count?: number;
+  questions: RawQuestionBankItem[];
+}
+
+export interface RawCorrelationLinkItem {
+  app_lookup_key: string;
+  question_id: string;
+  exam_id: string;
+  question_number: number;
+  pdf_page?: number;
+  page_as_listed_in_analysis_csv?: number;
+  page_number_corrected?: boolean;
+  source_pdf?: string;
+  program_code?: string;
+  topic?: string;
+  area?: string;
+  pareto_group?: string;
+  program_link_type?: string;
+  question_type?: 'multiple_choice' | 'true_false';
+  answer_key?: RawQuestionBankItem['answer_key'];
+  correct_answer?: string | null;
+  correct_option_label?: string | null;
+  correct_option_text?: string | null;
+  correct_judgment?: 'CERTO' | 'ERRADO' | null;
+  answer_key_status?: AnswerKeyStatus;
+  answer_key_source_pdf?: string;
+  answer_key_source_page?: number;
+}
+
+export interface RawQuestionCorrelationPayload {
+  schema_name?: string;
+  schema_version?: string;
+  dataset_id?: string;
+  question_count?: number;
+  question_links: RawCorrelationLinkItem[];
+}
+
+export interface SpecificExamMetadata {
+  exam_id: string;
+  exam_name: string;
+  company: string;
+  year: number;
+  bank: string;
+  emphasis: string;
+  question_type: 'multiple_choice' | 'true_false';
+  question_count: number;
+  question_number_range: [number, number];
+  specific_questions_only: boolean;
+  excluded_basic_question_range: [number, number];
+  source_pdf_original_name: string;
+  source_pdf_sha256?: string;
+  source_pdf_total_pages: number;
+  specific_pdf_path: string;
+  specific_pdf_page_count: number;
+  original_to_specific_pdf_page_map?: Record<string, number>;
+  specific_pages_in_original_pdf?: number[];
+  answer_key_status: AnswerKeyStatus;
+  answer_key_status_label: string;
+  answer_key_source_pdf: string;
+  answer_key_source_page: number;
+  note?: string;
+}
+
+export interface SpecificQuestionItem {
+  question_id: string;
+  app_lookup_key: string;
+  exam_id: string;
+  exam_name: string;
+  company: string;
+  year: number;
+  bank: string;
+  emphasis: string;
+  question_number: number;
+  question_type: 'multiple_choice' | 'true_false';
+  pdf_page: number;
+  source_pdf_page_original?: number;
+  source_pdf_page_specific_derivative: number;
+  source_pdf: string;
+  specific_pdf_path: string;
+  question_text: string;
+  context_text: string;
+  display_text?: string;
+  question_text_normalized?: string;
+  context_text_normalized?: string;
+  display_text_normalized?: string;
+  statement_without_number?: string;
+  alternatives: QuestionAlternative[];
+  alternative_count?: number;
+  answer_key?: RawQuestionBankItem['answer_key'];
+  correct_answer?: string | null;
+  correct_option_label?: string | null;
+  correct_option_text?: string | null;
+  correct_judgment?: 'CERTO' | 'ERRADO' | null;
+  answer_key_status?: AnswerKeyStatus;
+  answer_display_value?: string;
+  analysis?: {
+    area?: string;
+    topic?: string;
+    what_it_tests?: string;
+    program_code?: string;
+    secondary_program_code?: string;
+    program_link_type?: string;
+    analysis_note?: string;
+    pareto_group?: string;
+    program_reference?: {
+      program_code?: string;
+      program_area?: string;
+      program_item?: string;
+      program_content?: string;
+      program_questions_direct?: string;
+      program_questions_correlated?: string;
+      program_adherence_note?: string;
+    };
+  };
+  visual_reference?: {
+    may_need_pdf_figure?: boolean;
+    pdf_page_bbox_points?: number[];
+    pdf_page_size_points?: number[];
+    image_path?: string;
+    image_format?: string;
+    image_width_px?: number;
+    image_height_px?: number;
+  };
+  app_render?: {
+    primary_mode?: string;
+    show_original_image?: boolean;
+    image_path?: string;
+    show_context_first?: boolean;
+    response_component?: 'multiple_choice' | 'true_false';
+  };
+  basic_subjects_excluded?: boolean;
+  extraction_status?: string;
+}
+
+export interface SpecificQuestionsPayload {
+  schema?: string;
+  generated_at_utc?: string;
+  exam_count?: number;
+  question_count?: number;
+  exams: SpecificExamMetadata[];
+  questions: SpecificQuestionItem[];
+}
+
+export interface SpecificQuestionIndexEntry {
+  question_id: string;
+  exam_id: string;
+  question_number: number;
+  pdf_page_original: number;
+  pdf_page_specific_derivative: number;
+  question_image_path: string;
+  specific_pdf_path: string;
+  answer: string;
+  answer_status: AnswerKeyStatus;
+}
+
 export interface QuestionRecord {
-  id: string; // `${prova}::${questao}`
+  id: string; // `${prova}::${questao}` (preserved for localStorage/backup compatibility)
+  questionId?: string; // Stable ID e.g. TRANSPETRO_2018_OPERACAO_Q021
+  appLookupKey?: string; // Composite key e.g. TRANSPETRO_2018_OPERACAO:21
+  examId?: string; // e.g. TRANSPETRO_2018_OPERACAO
   prova: string;
   concursoCurto: string;
   empresa: string;
@@ -43,6 +280,8 @@ export interface QuestionRecord {
   banca: string;
   questao: number;
   paginaPdf: number;
+  paginaPdfOriginalCsv?: number;
+  pdfPageCorrected?: boolean;
   areaOriginal: string;
   tema: string;
   topico: string;
@@ -57,6 +296,34 @@ export interface QuestionRecord {
   arquivoOrigem: string;
   topicoEditalUnificado: string;
   isCustom?: boolean;
+  // Enriched fields from banco_questoes_operacao_dutos_app.json & correlacao_questoes_app.json & questoes_especificas.json
+  questionType?: 'multiple_choice' | 'true_false';
+  contextText?: string;
+  questionText?: string;
+  displayText?: string;
+  contextTextNormalized?: string;
+  questionTextNormalized?: string;
+  displayTextNormalized?: string;
+  statementWithoutNumber?: string;
+  alternatives?: QuestionAlternative[];
+  mayNeedPdfFigure?: boolean;
+  originalImagePath?: string;
+  imageWidthPx?: number;
+  imageHeightPx?: number;
+  showContextFirst?: boolean;
+  specificPdfPath?: string;
+  specificPdfPage?: number;
+  specificPdfTotalPages?: number;
+  sourcePdfPageOriginal?: number;
+  referenceMaterialPath?: string;
+  basicSubjectsExcluded?: boolean;
+  answerKey?: QuestionAnswerKey;
+  correctAnswer?: string | null;
+  correctOptionLabel?: string | null;
+  correctOptionText?: string | null;
+  correctJudgment?: 'CERTO' | 'ERRADO' | null;
+  answerKeyStatus?: AnswerKeyStatus;
+  isAnnulled?: boolean;
 }
 
 export interface ParetoRow {
@@ -116,6 +383,19 @@ export interface LocatorFilters {
   grupo: string;
   vinculo: string;
   statusDesempenho: string;
+}
+
+export interface OriginalBankFilters {
+  query: string;
+  empresa: string;
+  prova: string;
+  ano: string;
+  banca: string;
+  enfase: string;
+  grupo: string;
+  area: string;
+  tema: string;
+  questaoNumero: string;
 }
 
 export interface NewQuestionInput {

@@ -1,0 +1,227 @@
+[
+  {
+    "exam_id": "TRANSPETRO_2018_OPERACAO",
+    "exam_name": "Transpetro 2018 — Técnico(a) de Operação Júnior",
+    "company": "Transpetro",
+    "year": 2018,
+    "bank": "CESGRANRIO",
+    "emphasis": "Técnico(a) de Operação Júnior",
+    "question_type": "multiple_choice",
+    "question_count": 40,
+    "question_number_range": [
+      21,
+      60
+    ],
+    "specific_questions_only": true,
+    "excluded_basic_question_range": [
+      1,
+      20
+    ],
+    "source_pdf_original_name": "2018 TRANSPETRO - cesgranrio-2018-transpetro-tecnico-de-operacao-junior-prova(1).pdf",
+    "source_pdf_sha256": "d366d4b27f0ebee3df2d21632e42894939f4e20c0f7269e84f0b977e7c6cc334",
+    "source_pdf_total_pages": 13,
+    "specific_pdf_path": "specific_pdfs/TRANSPETRO_2018_OPERACAO_somente_conhecimentos_especificos.pdf",
+    "specific_pdf_page_count": 7,
+    "original_to_specific_pdf_page_map": {
+      "6": 1,
+      "7": 2,
+      "8": 3,
+      "9": 4,
+      "10": 5,
+      "11": 6,
+      "12": 7
+    },
+    "specific_pages_in_original_pdf": [
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "answer_key_status": "official_adjusted",
+    "answer_key_status_label": "Gabarito oficial alterado após recursos (09/05/2018)",
+    "answer_key_source_pdf": "2018 TRANSPETRO - cesgranrio-2018-transpetro-tecnico-de-operacao-junior-gabarito.pdf",
+    "answer_key_source_page": 3,
+    "note": "The derivative PDF contains only original pages that contain questions from the specific-knowledge section. Basic-knowledge question pages are excluded."
+  },
+  {
+    "exam_id": "PETROBRAS_2023_1_OPERACAO",
+    "exam_name": "Petrobras 2023.1 — Ênfase 7: Operação",
+    "company": "Petrobras",
+    "year": 2023,
+    "bank": "CEBRASPE",
+    "emphasis": "Ênfase 7 — Operação",
+    "question_type": "true_false",
+    "question_count": 60,
+    "question_number_range": [
+      41,
+      100
+    ],
+    "specific_questions_only": true,
+    "excluded_basic_question_range": [
+      1,
+      40
+    ],
+    "source_pdf_original_name": "2023 - anfase_7_operacao(2).pdf",
+    "source_pdf_sha256": "9eebafcc7b944206004fc6031fad9c8bd51e65e3df334dc82cfa814d35e212dd",
+    "source_pdf_total_pages": 8,
+    "specific_pdf_path": "specific_pdfs/PETROBRAS_2023_1_OPERACAO_somente_conhecimentos_especificos.pdf",
+    "specific_pdf_page_count": 5,
+    "original_to_specific_pdf_page_map": {
+      "4": 1,
+      "5": 2,
+      "6": 3,
+      "7": 4,
+      "8": 5
+    },
+    "specific_pages_in_original_pdf": [
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "answer_key_status": "official_preliminary",
+    "answer_key_status_label": "Gabarito oficial preliminar",
+    "answer_key_source_pdf": "2023 - gabarito(1).pdf",
+    "answer_key_source_page": 8,
+    "note": "The derivative PDF contains only original pages that contain questions from the specific-knowledge section. Basic-knowledge question pages are excluded."
+  },
+  {
+    "exam_id": "PETROBRAS_2023_2_OPERACAO",
+    "exam_name": "Petrobras 2023.2 — Ênfase 8: Operação",
+    "company": "Petrobras",
+    "year": 2023,
+    "bank": "CEBRASPE",
+    "emphasis": "Ênfase 8 — Operação",
+    "question_type": "true_false",
+    "question_count": 60,
+    "question_number_range": [
+      41,
+      100
+    ],
+    "specific_questions_only": true,
+    "excluded_basic_question_range": [
+      1,
+      40
+    ],
+    "source_pdf_original_name": "2024 - operacao(2).pdf",
+    "source_pdf_sha256": "2affc23f93885ffb9f823b6446d5f2cd0106d1f3ec48311b83b29595639e29bc",
+    "source_pdf_total_pages": 7,
+    "specific_pdf_path": "specific_pdfs/PETROBRAS_2023_2_OPERACAO_somente_conhecimentos_especificos.pdf",
+    "specific_pdf_page_count": 4,
+    "original_to_specific_pdf_page_map": {
+      "4": 1,
+      "5": 2,
+      "6": 3,
+      "7": 4
+    },
+    "specific_pages_in_original_pdf": [
+      4,
+      5,
+      6,
+      7
+    ],
+    "answer_key_status": "official_final",
+    "answer_key_status_label": "Gabarito oficial definitivo",
+    "answer_key_source_pdf": "2024 - gabarito_oficial(1).pdf",
+    "answer_key_source_page": 9,
+    "note": "The derivative PDF contains only original pages that contain questions from the specific-knowledge section. Basic-knowledge question pages are excluded."
+  },
+  {
+    "exam_id": "TRANSPETRO_2023_1_DUTOS_TERMINAIS",
+    "exam_name": "Transpetro 2023.1 — Ênfase 2: Dutos e Terminais",
+    "company": "Transpetro",
+    "year": 2023,
+    "bank": "CESGRANRIO",
+    "emphasis": "Ênfase 2 — Dutos e Terminais",
+    "question_type": "multiple_choice",
+    "question_count": 40,
+    "question_number_range": [
+      21,
+      60
+    ],
+    "specific_questions_only": true,
+    "excluded_basic_question_range": [
+      1,
+      20
+    ],
+    "source_pdf_original_name": "cesgranrio-2023-transpetro-tecnico-de-dutos-e-terminais-prova(1).pdf",
+    "source_pdf_sha256": "9c5f50de76d1f8794376b30d3f8b399a5539e9d397af5ca43d55134045b8e72a",
+    "source_pdf_total_pages": 17,
+    "specific_pdf_path": "specific_pdfs/TRANSPETRO_2023_1_DUTOS_TERMINAIS_somente_conhecimentos_especificos.pdf",
+    "specific_pdf_page_count": 9,
+    "original_to_specific_pdf_page_map": {
+      "8": 1,
+      "9": 2,
+      "10": 3,
+      "11": 4,
+      "12": 5,
+      "13": 6,
+      "14": 7,
+      "15": 8,
+      "16": 9
+    },
+    "specific_pages_in_original_pdf": [
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "answer_key_status": "official_final_adjusted",
+    "answer_key_status_label": "Gabarito oficial com ajuste após recursos",
+    "answer_key_source_pdf": "cesgranrio-2023-transpetro-tecnico-de-dutos-e-terminais-gabarito(1).pdf",
+    "answer_key_source_page": 2,
+    "note": "The derivative PDF contains only original pages that contain questions from the specific-knowledge section. Basic-knowledge question pages are excluded."
+  },
+  {
+    "exam_id": "ANSA_2026_OPERACAO",
+    "exam_name": "ANSA 2026 — Ênfase 22: Operação",
+    "company": "ANSA",
+    "year": 2026,
+    "bank": "CEBRASPE",
+    "emphasis": "Ênfase 22 — Operação",
+    "question_type": "true_false",
+    "question_count": 70,
+    "question_number_range": [
+      31,
+      100
+    ],
+    "specific_questions_only": true,
+    "excluded_basic_question_range": [
+      1,
+      30
+    ],
+    "source_pdf_original_name": "2026 - ANSA - OPERAÇÃO PROVA(1).pdf",
+    "source_pdf_sha256": "7838ae6ab76ddc2ddcd81b88f8cb1237dac859964738ee477a57f43e550d369c",
+    "source_pdf_total_pages": 7,
+    "specific_pdf_path": "specific_pdfs/ANSA_2026_OPERACAO_somente_conhecimentos_especificos.pdf",
+    "specific_pdf_page_count": 5,
+    "original_to_specific_pdf_page_map": {
+      "3": 1,
+      "4": 2,
+      "5": 3,
+      "6": 4,
+      "7": 5
+    },
+    "specific_pages_in_original_pdf": [
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "answer_key_status": "official_preliminary",
+    "answer_key_status_label": "Gabarito oficial preliminar",
+    "answer_key_source_pdf": "2026 - ANSA - OPERAÇÃO GABARITO(1).pdf",
+    "answer_key_source_page": 2,
+    "note": "The derivative PDF contains only original pages that contain questions from the specific-knowledge section. Basic-knowledge question pages are excluded."
+  }
+]

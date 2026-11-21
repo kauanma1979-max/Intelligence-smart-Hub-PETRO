@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
+  Eye,
+  EyeOff,
   FileText,
   Pause,
   Play,
@@ -23,6 +25,8 @@ import {
   buildSmartStudyPlan,
   generateCustomSimulado,
   getAvailableEditalScopes,
+  getQuestionAnswerKeyInfo,
+  isAnswerMatchingGabarito,
 } from '../utils/examIntelligence';
 import { HorizontalFrequencyBarChart } from './DataVizCharts';
 
@@ -94,6 +98,8 @@ export const StudyPlannerSimuladoView: React.FC<StudyPlannerSimuladoViewProps> =
   const [elapsedSec, setElapsedSec] = useState(0);
   const [simuladoSavedMsg, setSimuladoSavedMsg] = useState<string | null>(null);
   const [expandedPdfId, setExpandedPdfId] = useState<string | null>(null);
+  const [revealSimuladoKeys, setRevealSimuladoKeys] = useState(false);
+  const [revealedQuestionIds, setRevealedQuestionIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!timerRunning) return;
@@ -113,9 +119,12 @@ export const StudyPlannerSimuladoView: React.FC<StudyPlannerSimuladoViewProps> =
     const initialDrafts: Record<string, SimuladoDraftAnswer> = {};
     for (const q of generated) {
       const isCeb = q.banca.toUpperCase().includes('CEBRASPE');
+      const ak = getQuestionAnswerKeyInfo(q);
       initialDrafts[q.id] = {
         minhaResposta: '',
-        gabarito: isCeb ? 'Certo' : 'A',
+        gabarito: ak.isAnnulled
+          ? 'ANULADA'
+          : ak.expectedChoiceValue || (isCeb ? 'Certo' : 'A'),
         status: 'auto',
         confianca: 'media',
         dificuldade: 'media',
@@ -127,6 +136,8 @@ export const StudyPlannerSimuladoView: React.FC<StudyPlannerSimuladoViewProps> =
     setTimerRunning(generated.length > 0);
     setSimuladoSavedMsg(null);
     setExpandedPdfId(null);
+    setRevealSimuladoKeys(false);
+    setRevealedQuestionIds({});
   };
 
   const handleUpdateDraft = (
@@ -167,8 +178,10 @@ export const StudyPlannerSimuladoView: React.FC<StudyPlannerSimuladoViewProps> =
       let finalStatus: Exclude<PerformanceStatus, 'pendente'>;
       if (d.status !== 'auto') {
         finalStatus = d.status;
+      } else if (q.isAnnulled || gab.toUpperCase() === 'ANULADA') {
+        finalStatus = 'revisar';
       } else if (mine && gab) {
-        finalStatus = mine.toUpperCase() === gab.toUpperCase() ? 'acerto' : 'erro';
+        finalStatus = isAnswerMatchingGabarito(mine, gab, q) ? 'acerto' : 'erro';
       } else {
         finalStatus = d.revisaoNecessaria ? 'revisar' : 'acerto';
       }
@@ -687,6 +700,30 @@ export const StudyPlannerSimuladoView: React.FC<StudyPlannerSimuladoViewProps> =
                   </button>
                   <button
                     type="button"
+                    onClick={() => {
+                      if (revealSimuladoKeys) {
+                        setRevealSimuladoKeys(false);
+                        setRevealedQuestionIds({});
+                      } else {
+                        setRevealSimuladoKeys(true);
+                      }
+                    }}
+                    className="ui-btn-secondary"
+                  >
+                    {revealSimuladoKeys ? (
+                      <>
+                        <EyeOff className="h-3.5 w-3.5" />
+                        Ocultar gabaritos
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="h-3.5 w-3.5" />
+                        Exibir gabaritos
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
                     disabled={answeredCount === 0}
                     onClick={handleFinalizeSimulado}
                     className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-[var(--status-success)] px-3.5 py-1.5 text-xs font-semibold text-white hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap"
@@ -701,6 +738,9 @@ export const StudyPlannerSimuladoView: React.FC<StudyPlannerSimuladoViewProps> =
                 {activeSimulado.map((q, index) => {
                   const d = draftAnswers[q.id];
                   const isCeb = q.banca.toUpperCase().includes('CEBRASPE');
+                  const akInfo = getQuestionAnswerKeyInfo(q);
+                  const isKeyRevealed =
+                    revealSimuladoKeys || Boolean(revealedQuestionIds[q.id]);
                   const choices = isCeb
                     ? ['Certo', 'Errado']
                     : ['A', 'B', 'C', 'D', 'E'];
@@ -739,7 +779,54 @@ export const StudyPlannerSimuladoView: React.FC<StudyPlannerSimuladoViewProps> =
                           <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
                             {q.exigencia}
                           </p>
-                          <div className="mt-1 break-all font-mono text-xs text-[var(--text-muted)]">
+                          {q.contextText && (
+                            <div className="mt-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)]/70 p-2.5 text-xs leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">
+                              {q.contextText}
+                            </div>
+                          )}
+                          {q.statementWithoutNumber && (
+                            <div className="mt-2 text-xs leading-relaxed text-[var(--text-primary)] whitespace-pre-line">
+                              {q.statementWithoutNumber}
+                            </div>
+                          )}
+                          {q.alternatives && q.alternatives.length > 0 && (
+                            <ul className="mt-2 space-y-1">
+                              {q.alternatives.map((alt) => {
+                                const isPicked = d?.minhaResposta === alt.label;
+                                const isCorrectAlt =
+                                  isKeyRevealed &&
+                                  !akInfo.isAnnulled &&
+                                  akInfo.expectedChoiceValue === alt.label;
+                                return (
+                                  <li key={alt.label}>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdateDraft(q.id, {
+                                          minhaResposta: alt.label,
+                                        })
+                                      }
+                                      className={`flex w-full items-start gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors ${
+                                        isCorrectAlt
+                                          ? 'border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--text-primary)]'
+                                          : isPicked
+                                            ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)] text-[var(--text-primary)]'
+                                            : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]'
+                                      }`}
+                                    >
+                                      <span className="font-mono font-bold text-[var(--text-primary)]">
+                                        ({alt.label})
+                                      </span>
+                                      <span className="flex-1 whitespace-pre-line">
+                                        {alt.text}
+                                      </span>
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                          <div className="mt-1.5 break-all font-mono text-xs text-[var(--text-muted)]">
                             Arquivo: {q.arquivoOrigem}
                           </div>
                         </div>
@@ -769,11 +856,14 @@ export const StudyPlannerSimuladoView: React.FC<StudyPlannerSimuladoViewProps> =
                         <div className="rounded-lg border border-[var(--status-info-border)] bg-[var(--status-info-bg)] p-3 text-xs">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <span className="font-medium text-[var(--brand-primary-ink)]">
-                              {q.arquivoOrigem} — Página {q.paginaPdf}
+                              {q.arquivoOrigem} — Pág. original {q.paginaPdf}
+                              {q.specificPdfPage
+                                ? ` (Pág. ${q.specificPdfPage} no PDF específico)`
+                                : ''}
                             </span>
                             <label className="ui-btn-secondary cursor-pointer !min-h-[34px] text-[var(--brand-primary-ink)]">
                               <Upload className="h-3.5 w-3.5" />
-                              {hasPdf ? 'Trocar PDF' : 'Anexar PDF original'}
+                              {hasPdf ? 'Trocar PDF' : 'Anexar PDF completo'}
                               <input
                                 type="file"
                                 accept="application/pdf"
@@ -790,13 +880,19 @@ export const StudyPlannerSimuladoView: React.FC<StudyPlannerSimuladoViewProps> =
                               />
                             </label>
                           </div>
-                          {hasPdf && (
+                          {hasPdf ? (
                             <iframe
                               src={`${attachedPdfs[q.arquivoOrigem]}#page=${q.paginaPdf}`}
                               title={`${q.arquivoOrigem} pág ${q.paginaPdf}`}
                               className="mt-2 h-64 w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
                             />
-                          )}
+                          ) : q.specificPdfPath ? (
+                            <iframe
+                              src={`${q.specificPdfPath}#page=${q.specificPdfPage ?? 1}`}
+                              title={`${q.prova} específicas pág ${q.specificPdfPage ?? 1}`}
+                              className="mt-2 h-64 w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
+                            />
+                          ) : null}
                         </div>
                       )}
 
@@ -829,26 +925,75 @@ export const StudyPlannerSimuladoView: React.FC<StudyPlannerSimuladoViewProps> =
                           </div>
 
                           <div>
-                            <label
-                              htmlFor={`sim-gab-${q.id}`}
-                              className="block text-xs font-medium text-[var(--text-secondary)]"
-                            >
-                              Gabarito
-                            </label>
-                            <select
-                              id={`sim-gab-${q.id}`}
-                              value={d.gabarito}
-                              onChange={(e) =>
-                                handleUpdateDraft(q.id, { gabarito: e.target.value })
-                              }
-                              className="ui-select mt-1"
-                            >
-                              {choices.map((c) => (
-                                <option key={c} value={c}>
-                                  {c}
-                                </option>
-                              ))}
-                            </select>
+                            <div className="flex items-center justify-between gap-2">
+                              <label
+                                htmlFor={`sim-gab-${q.id}`}
+                                className="block text-xs font-medium text-[var(--text-secondary)]"
+                              >
+                                Gabarito{' '}
+                                {akInfo.isPreliminary && isKeyRevealed ? '(Preliminar)' : ''}
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setRevealedQuestionIds((prev) => ({
+                                    ...prev,
+                                    [q.id]: !isKeyRevealed,
+                                  }))
+                                }
+                                aria-label={
+                                  isKeyRevealed
+                                    ? `Ocultar gabarito da questão ${q.questao}`
+                                    : `Exibir gabarito da questão ${q.questao}`
+                                }
+                                title={
+                                  isKeyRevealed ? 'Ocultar gabarito' : 'Exibir gabarito'
+                                }
+                                className="inline-flex h-6 w-6 items-center justify-center rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary-ink)]"
+                              >
+                                {isKeyRevealed ? (
+                                  <EyeOff className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Eye className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </div>
+                            {isKeyRevealed ? (
+                              <select
+                                id={`sim-gab-${q.id}`}
+                                value={d.gabarito}
+                                disabled={akInfo.isAnnulled}
+                                onChange={(e) =>
+                                  handleUpdateDraft(q.id, { gabarito: e.target.value })
+                                }
+                                className="ui-select mt-1"
+                              >
+                                {akInfo.isAnnulled ? (
+                                  <option value="ANULADA">ANULADA</option>
+                                ) : (
+                                  choices.map((c) => (
+                                    <option key={c} value={c}>
+                                      {c}
+                                    </option>
+                                  ))
+                                )}
+                              </select>
+                            ) : (
+                              <button
+                                type="button"
+                                id={`sim-gab-${q.id}`}
+                                onClick={() =>
+                                  setRevealedQuestionIds((prev) => ({
+                                    ...prev,
+                                    [q.id]: true,
+                                  }))
+                                }
+                                className="mt-1 flex min-h-[38px] w-full items-center justify-between rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 text-xs text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary-ink)]"
+                              >
+                                <span>Oculto</span>
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </div>
 
                           <div>

@@ -1,6 +1,7 @@
 import type {
   AdherenceAuditRow,
   AdherenceCategory,
+  AnswerKeyStatus,
   BackupRestoreResult,
   BlindSpotSubtopicRow,
   BoardComparisonSummary,
@@ -23,19 +24,28 @@ import type {
   LinkType,
   LocatorFilters,
   NewExamPayload,
+  OriginalBankFilters,
   ParetoRow,
   PerformanceBucketRow,
   PerformanceStatus,
   PerformanceTimelinePoint,
   PresenceScope,
+  QuestionAnswerKey,
   QuestionEngineeringStudy,
   QuestionPerformance,
   QuestionRecord,
   RankingRow,
+  RawCorrelationLinkItem,
+  RawQuestionBankItem,
+  RawQuestionBankPayload,
+  RawQuestionCorrelationPayload,
   ReasoningClassificationRow,
   ReasoningType,
   ResolvedAttemptRow,
   SimuladoConfig,
+  SpecificExamMetadata,
+  SpecificQuestionItem,
+  SpecificQuestionsPayload,
   StudentAttemptRecord,
   StudentPerformanceSummary,
   StudyActivity,
@@ -460,6 +470,578 @@ export function buildUnifiedDatabase(
   return records;
 }
 
+const EXAM_NAME_TO_ID_FALLBACK: Record<string, string> = {
+  'Transpetro 2018 — Técnico(a) de Operação Júnior': 'TRANSPETRO_2018_OPERACAO',
+  'Petrobras 2023.1 — Ênfase 7: Operação': 'PETROBRAS_2023_1_OPERACAO',
+  'Petrobras 2023.2 — Ênfase 8: Operação': 'PETROBRAS_2023_2_OPERACAO',
+  'Transpetro 2023.1 — Ênfase 2: Dutos e Terminais': 'TRANSPETRO_2023_1_DUTOS_TERMINAIS',
+  'ANSA 2026 — Ênfase 22: Operação': 'ANSA_2026_OPERACAO',
+};
+
+function mapRawAnswerKey(
+  rawAk: RawQuestionBankItem['answer_key']
+): QuestionAnswerKey | undefined {
+  if (!rawAk) return undefined;
+  return {
+    value: rawAk.value ?? null,
+    displayValue: rawAk.display_value,
+    status: rawAk.status,
+    statusLabel: rawAk.status_label,
+    questionType: rawAk.question_type,
+    sourcePdf: rawAk.source_pdf,
+    sourcePage: rawAk.source_page,
+    sourceNote: rawAk.source_note,
+    previousValue: rawAk.previous_value,
+    adjustmentNote: rawAk.adjustment_note,
+    sourceAdjustmentPage: rawAk.source_adjustment_page,
+    originalMark: rawAk.original_mark,
+  };
+}
+
+/**
+ * Enriches the unified CSV database with full question statements, alternatives,
+ * official/preliminary/adjusted answer keys, and corrected PDF page references from
+ * `banco_questoes_operacao_dutos_app.json` (primary) and `correlacao_questoes_app.json`.
+ *
+ * Joins strictly by `question_id`, `app_lookup_key`, or composite `(exam_id/exam_name, question_number)`.
+ * Never alters existing Pareto/syllabus/program correlations or `${prova}::${questao}` IDs.
+ */
+export function enrichDatabaseWithAnswerBank(
+  records: QuestionRecord[],
+  bankPayload?: RawQuestionBankPayload | null,
+  correlacaoPayload?: RawQuestionCorrelationPayload | null
+): QuestionRecord[] {
+  if (!bankPayload?.questions?.length && !correlacaoPayload?.question_links?.length) {
+    return records;
+  }
+
+  const bankByQuestionId = new Map<string, RawQuestionBankItem>();
+  const bankByLookupKey = new Map<string, RawQuestionBankItem>();
+  const bankByExamAndNumber = new Map<string, RawQuestionBankItem>();
+
+  for (const item of bankPayload?.questions ?? []) {
+    if (item.question_id) bankByQuestionId.set(item.question_id, item);
+    if (item.app_lookup_key) bankByLookupKey.set(item.app_lookup_key, item);
+    if (item.exam_name && typeof item.question_number === 'number') {
+      bankByExamAndNumber.set(`${item.exam_name}::${item.question_number}`, item);
+    }
+    if (item.exam_id && typeof item.question_number === 'number') {
+      bankByExamAndNumber.set(`${item.exam_id}:${item.question_number}`, item);
+    }
+  }
+
+  const linkByQuestionId = new Map<string, RawCorrelationLinkItem>();
+  const linkByLookupKey = new Map<string, RawCorrelationLinkItem>();
+
+  for (const link of correlacaoPayload?.question_links ?? []) {
+    if (link.question_id) linkByQuestionId.set(link.question_id, link);
+    if (link.app_lookup_key) linkByLookupKey.set(link.app_lookup_key, link);
+  }
+
+  return records.map((rec) => {
+    const inferredExamId = rec.examId || EXAM_NAME_TO_ID_FALLBACK[rec.prova];
+    const compositeLookup = inferredExamId ? `${inferredExamId}:${rec.questao}` : undefined;
+
+    const bankItem =
+      (rec.questionId ? bankByQuestionId.get(rec.questionId) : undefined) ||
+      (rec.appLookupKey ? bankByLookupKey.get(rec.appLookupKey) : undefined) ||
+      (compositeLookup ? bankByLookupKey.get(compositeLookup) : undefined) ||
+      bankByExamAndNumber.get(`${rec.prova}::${rec.questao}`);
+
+    const linkItem =
+      (bankItem?.question_id ? linkByQuestionId.get(bankItem.question_id) : undefined) ||
+      (bankItem?.app_lookup_key ? linkByLookupKey.get(bankItem.app_lookup_key) : undefined) ||
+      (compositeLookup ? linkByLookupKey.get(compositeLookup) : undefined);
+
+    if (!bankItem && !linkItem) return rec;
+
+    const rawAnswerKey = bankItem?.answer_key || linkItem?.answer_key;
+    const status: AnswerKeyStatus | undefined =
+      rawAnswerKey?.status || bankItem?.answer_key_status || linkItem?.answer_key_status;
+    const rawCorrectAnswer =
+      bankItem?.correct_answer !== undefined ? bankItem.correct_answer : linkItem?.correct_answer;
+
+    const isAnnulled =
+      status === 'annulled' ||
+      rawCorrectAnswer === 'ANULADA' ||
+      rawAnswerKey?.value === null;
+
+    const pdfPageCorrected = Boolean(
+      bankItem?.page_number_corrected ?? linkItem?.page_number_corrected
+    );
+    const jsonPdfPage = bankItem?.pdf_page ?? linkItem?.pdf_page;
+
+    const nextPaginaPdf =
+      pdfPageCorrected && typeof jsonPdfPage === 'number' && jsonPdfPage > 0
+        ? jsonPdfPage
+        : rec.paginaPdf;
+
+    return {
+      ...rec,
+      questionId: bankItem?.question_id || linkItem?.question_id || rec.questionId,
+      appLookupKey: bankItem?.app_lookup_key || linkItem?.app_lookup_key || rec.appLookupKey,
+      examId: bankItem?.exam_id || linkItem?.exam_id || inferredExamId || rec.examId,
+      paginaPdf: nextPaginaPdf,
+      paginaPdfOriginalCsv:
+        pdfPageCorrected && nextPaginaPdf !== rec.paginaPdf ? rec.paginaPdf : rec.paginaPdfOriginalCsv,
+      pdfPageCorrected: pdfPageCorrected || rec.pdfPageCorrected,
+      questionType: bankItem?.question_type || linkItem?.question_type || rec.questionType,
+      contextText: bankItem?.context_text ?? rec.contextText,
+      questionText: bankItem?.question_text ?? rec.questionText,
+      displayText: bankItem?.display_text ?? rec.displayText,
+      statementWithoutNumber:
+        bankItem?.statement_without_number ?? rec.statementWithoutNumber,
+      alternatives: bankItem?.alternatives ?? rec.alternatives,
+      mayNeedPdfFigure:
+        bankItem?.visual_reference?.may_need_pdf_figure ?? rec.mayNeedPdfFigure,
+      answerKey: mapRawAnswerKey(rawAnswerKey) ?? rec.answerKey,
+      answerKeyStatus: status ?? rec.answerKeyStatus,
+      isAnnulled,
+      // Do NOT assign an alternative or valid judgment when annulled
+      correctAnswer: isAnnulled ? 'ANULADA' : (rawCorrectAnswer ?? rec.correctAnswer),
+      correctOptionLabel: isAnnulled
+        ? null
+        : (bankItem?.correct_option_label ?? linkItem?.correct_option_label ?? null),
+      correctOptionText: isAnnulled
+        ? null
+        : (bankItem?.correct_option_text ?? linkItem?.correct_option_text ?? null),
+      correctJudgment: isAnnulled
+        ? null
+        : (bankItem?.correct_judgment ?? linkItem?.correct_judgment ?? null),
+    };
+  });
+}
+
+export function resolveSpecificPdfUrl(path?: string | null): string | undefined {
+  if (!path) return undefined;
+  const clean = path.trim();
+  if (!clean) return undefined;
+  if (clean.startsWith('/provas-especificas/')) return clean;
+  if (clean.startsWith('specific_pdfs/')) {
+    return `/provas-especificas/${clean.slice('specific_pdfs/'.length)}`;
+  }
+  if (clean.startsWith('/specific_pdfs/')) {
+    return `/provas-especificas/${clean.slice('/specific_pdfs/'.length)}`;
+  }
+  return clean.startsWith('/') ? clean : `/${clean}`;
+}
+
+export function resolveQuestionImageUrl(path?: string | null): string | undefined {
+  if (!path) return undefined;
+  const clean = path.trim();
+  if (!clean) return undefined;
+  return clean.startsWith('/') ? clean : `/${clean}`;
+}
+
+/**
+ * Looks up a question exclusively by `question_id` (`questionId`) or
+ * `app_lookup_key` (`appLookupKey`, i.e., `EXAM_ID:numero`).
+ * Never searches by isolated question number.
+ */
+export function resolveQuestionByKey(
+  questions: QuestionRecord[],
+  keyOrId: string
+): QuestionRecord | undefined {
+  const target = keyOrId.trim();
+  if (!target) return undefined;
+  return questions.find(
+    (q) => q.questionId === target || q.appLookupKey === target || q.id === target
+  );
+}
+
+/**
+ * Integrates the official `database/questoes_especificas.json` / `.min.json` and
+ * `database/provas.json` package into the unified QuestionRecord database.
+ * Joins exclusively by `question_id` or `app_lookup_key` (EXAM_ID:numero),
+ * preserving all CSV/Pareto/program correlations and localStorage record IDs.
+ */
+export function mergeSpecificQuestionsDatabase(
+  records: QuestionRecord[],
+  specificPayload?: SpecificQuestionsPayload | null,
+  provasPayload?: SpecificExamMetadata[] | null
+): QuestionRecord[] {
+  const specQuestions = specificPayload?.questions ?? [];
+  const examsMeta =
+    provasPayload && provasPayload.length > 0
+      ? provasPayload
+      : specificPayload?.exams ?? [];
+
+  if (specQuestions.length === 0 && examsMeta.length === 0) {
+    return records;
+  }
+
+  const examMetaMap = new Map<string, SpecificExamMetadata>();
+  for (const ex of examsMeta) {
+    if (ex.exam_id) examMetaMap.set(ex.exam_id, ex);
+  }
+
+  const specByQuestionId = new Map<string, SpecificQuestionItem>();
+  const specByLookupKey = new Map<string, SpecificQuestionItem>();
+
+  for (const sq of specQuestions) {
+    if (sq.question_id) specByQuestionId.set(sq.question_id, sq);
+    if (sq.app_lookup_key) specByLookupKey.set(sq.app_lookup_key, sq);
+  }
+
+  return records.map((rec) => {
+    const inferredExamId = rec.examId || EXAM_NAME_TO_ID_FALLBACK[rec.prova];
+    const derivedLookup = inferredExamId ? `${inferredExamId}:${rec.questao}` : undefined;
+
+    const spec =
+      (rec.questionId ? specByQuestionId.get(rec.questionId) : undefined) ||
+      (rec.appLookupKey ? specByLookupKey.get(rec.appLookupKey) : undefined) ||
+      (derivedLookup ? specByLookupKey.get(derivedLookup) : undefined);
+
+    if (!spec) {
+      const fallbackMeta = inferredExamId ? examMetaMap.get(inferredExamId) : undefined;
+      if (!fallbackMeta) return rec;
+      return {
+        ...rec,
+        specificPdfPath:
+          rec.specificPdfPath || resolveSpecificPdfUrl(fallbackMeta.specific_pdf_path),
+        specificPdfTotalPages:
+          rec.specificPdfTotalPages ?? fallbackMeta.specific_pdf_page_count,
+      };
+    }
+
+    const examMeta = examMetaMap.get(spec.exam_id);
+    const rawAk = spec.answer_key;
+    const status: AnswerKeyStatus | undefined =
+      rawAk?.status || spec.answer_key_status || rec.answerKeyStatus;
+    const rawCorrect =
+      spec.correct_answer !== undefined ? spec.correct_answer : rec.correctAnswer;
+    const isAnnulled =
+      status === 'annulled' || rawCorrect === 'ANULADA' || rawAk?.value === null;
+
+    const origPage = spec.source_pdf_page_original ?? spec.pdf_page ?? rec.paginaPdf;
+
+    return {
+      ...rec,
+      questionId: spec.question_id || rec.questionId,
+      appLookupKey: spec.app_lookup_key || rec.appLookupKey,
+      examId: spec.exam_id || rec.examId,
+      questionType: spec.question_type || rec.questionType,
+      contextText: spec.context_text ?? rec.contextText,
+      questionText: spec.question_text ?? rec.questionText,
+      displayText: spec.display_text ?? rec.displayText,
+      contextTextNormalized:
+        spec.context_text_normalized ?? spec.context_text ?? rec.contextTextNormalized,
+      questionTextNormalized:
+        spec.question_text_normalized ?? spec.question_text ?? rec.questionTextNormalized,
+      displayTextNormalized:
+        spec.display_text_normalized ?? spec.display_text ?? rec.displayTextNormalized,
+      statementWithoutNumber:
+        spec.statement_without_number ?? rec.statementWithoutNumber,
+      alternatives:
+        spec.alternatives && spec.alternatives.length > 0
+          ? spec.alternatives
+          : rec.alternatives,
+      mayNeedPdfFigure:
+        spec.visual_reference?.may_need_pdf_figure ?? rec.mayNeedPdfFigure,
+      originalImagePath: resolveQuestionImageUrl(
+        spec.visual_reference?.image_path || spec.app_render?.image_path
+      ),
+      imageWidthPx: spec.visual_reference?.image_width_px ?? rec.imageWidthPx,
+      imageHeightPx: spec.visual_reference?.image_height_px ?? rec.imageHeightPx,
+      showContextFirst:
+        spec.app_render?.show_context_first ??
+        Boolean(spec.context_text_normalized || spec.context_text),
+      specificPdfPath: resolveSpecificPdfUrl(
+        spec.specific_pdf_path || examMeta?.specific_pdf_path
+      ),
+      specificPdfPage: spec.source_pdf_page_specific_derivative,
+      specificPdfTotalPages:
+        examMeta?.specific_pdf_page_count ?? rec.specificPdfTotalPages,
+      sourcePdfPageOriginal: origPage,
+      paginaPdf: origPage > 0 ? origPage : rec.paginaPdf,
+      referenceMaterialPath:
+        spec.exam_id === 'TRANSPETRO_2023_1_DUTOS_TERMINAIS'
+          ? '/reference_materials/TRANSPETRO_2023_1_DUTOS_TERMINAIS_tabela_periodica_apoio.pdf'
+          : rec.referenceMaterialPath,
+      basicSubjectsExcluded: spec.basic_subjects_excluded ?? true,
+      answerKey: mapRawAnswerKey(rawAk) ?? rec.answerKey,
+      answerKeyStatus: status,
+      isAnnulled,
+      correctAnswer: isAnnulled ? 'ANULADA' : (rawCorrect ?? rec.correctAnswer),
+      correctOptionLabel: isAnnulled
+        ? null
+        : (spec.correct_option_label ?? rec.correctOptionLabel ?? null),
+      correctOptionText: isAnnulled
+        ? null
+        : (spec.correct_option_text ?? rec.correctOptionText ?? null),
+      correctJudgment: isAnnulled
+        ? null
+        : (spec.correct_judgment ?? rec.correctJudgment ?? null),
+    };
+  });
+}
+
+export interface ExamCountValidationRow {
+  examId: string;
+  examName: string;
+  company: string;
+  year: number;
+  bank: string;
+  emphasis: string;
+  expectedCount: number;
+  actualCount: number;
+  questionNumberRange: [number, number];
+  excludedBasicRange: [number, number];
+  specificPdfUrl?: string;
+  specificPdfPageCount: number;
+  answerKeyStatus: AnswerKeyStatus;
+  answerKeyStatusLabel: string;
+  matchesCount: boolean;
+  basicExcludedValid: boolean;
+}
+
+export interface ExamPackageValidationSummary {
+  exams: ExamCountValidationRow[];
+  totalExpected: number;
+  totalActual: number;
+  isComplete270: boolean;
+  allBasicExcluded: boolean;
+}
+
+export function buildExamCountValidation(
+  provasMeta: SpecificExamMetadata[],
+  questions: QuestionRecord[]
+): ExamPackageValidationSummary {
+  const rows: ExamCountValidationRow[] = provasMeta.map((meta) => {
+    const matching = questions.filter((q) => q.examId === meta.exam_id);
+    const [minSpec, maxSpec] = meta.question_number_range;
+    const basicExcludedValid =
+      matching.length > 0 &&
+      matching.every((q) => q.questao >= minSpec && q.questao <= maxSpec);
+
+    return {
+      examId: meta.exam_id,
+      examName: meta.exam_name,
+      company: meta.company,
+      year: meta.year,
+      bank: meta.bank,
+      emphasis: meta.emphasis,
+      expectedCount: meta.question_count,
+      actualCount: matching.length,
+      questionNumberRange: meta.question_number_range,
+      excludedBasicRange: meta.excluded_basic_question_range,
+      specificPdfUrl: resolveSpecificPdfUrl(meta.specific_pdf_path),
+      specificPdfPageCount: meta.specific_pdf_page_count,
+      answerKeyStatus: meta.answer_key_status,
+      answerKeyStatusLabel: meta.answer_key_status_label,
+      matchesCount: matching.length === meta.question_count,
+      basicExcludedValid,
+    };
+  });
+
+  const totalExpected = rows.reduce((s, r) => s + r.expectedCount, 0);
+  const totalActual = rows.reduce((s, r) => s + r.actualCount, 0);
+
+  return {
+    exams: rows,
+    totalExpected,
+    totalActual,
+    isComplete270:
+      totalActual === 270 &&
+      totalExpected === 270 &&
+      rows.length === 5 &&
+      rows.every((r) => r.matchesCount),
+    allBasicExcluded: rows.length > 0 && rows.every((r) => r.basicExcludedValid),
+  };
+}
+
+export function filterOriginalBankQuestions(
+  questions: QuestionRecord[],
+  filters: OriginalBankFilters
+): QuestionRecord[] {
+  const qLower = filters.query.trim().toLowerCase();
+  const numQuery = filters.questaoNumero.trim();
+  const isAll = (val: string) => !val || val === 'Todas' || val === 'Todos';
+
+  return questions.filter((item) => {
+    if (!isAll(filters.empresa) && item.empresa !== filters.empresa) return false;
+    if (!isAll(filters.prova) && item.prova !== filters.prova) return false;
+    if (!isAll(filters.ano) && item.ano !== filters.ano) return false;
+    if (!isAll(filters.banca) && item.banca !== filters.banca) return false;
+    if (!isAll(filters.enfase) && item.enfase !== filters.enfase) return false;
+    if (!isAll(filters.grupo) && item.grupoEstudo !== filters.grupo) return false;
+    if (!isAll(filters.area) && item.areaOriginal !== filters.area) return false;
+    if (!isAll(filters.tema) && item.tema !== filters.tema) return false;
+
+    if (numQuery.length > 0 && String(item.questao) !== numQuery) {
+      return false;
+    }
+
+    if (qLower.length > 0) {
+      const altText = (item.alternatives || [])
+        .map((a) => `${a.label} ${a.text}`)
+        .join(' ');
+      const searchable = [
+        item.questionId || '',
+        item.appLookupKey || '',
+        item.examId || '',
+        item.prova,
+        item.empresa,
+        item.banca,
+        item.enfase,
+        String(item.questao),
+        item.areaOriginal,
+        item.tema,
+        item.grupoEstudo,
+        item.codigoPrograma,
+        item.exigencia,
+        item.contextTextNormalized || item.contextText || '',
+        item.questionTextNormalized || item.statementWithoutNumber || item.questionText || '',
+        altText,
+      ]
+        .join(' ')
+        .toLowerCase();
+      if (!searchable.includes(qLower)) return false;
+    }
+
+    return true;
+  });
+}
+
+export interface QuestionAnswerKeyInfo {
+  hasOfficialKey: boolean;
+  isAnnulled: boolean;
+  isPreliminary: boolean;
+  isAdjusted: boolean;
+  /** Normalized choice value compatible with student inputs ('A'..'E', 'Certo', 'Errado', or null if annulled/missing) */
+  expectedChoiceValue: string | null;
+  /** Short badge/chip text such as 'C', 'CERTO', 'ERRADO', 'ANULADA' */
+  shortAnswerLabel: string;
+  /** Human-readable status badge text */
+  statusBadgeLabel: string;
+  /** Status tone for styling */
+  statusTone: 'final' | 'adjusted' | 'preliminary' | 'annulled' | 'none';
+  optionText: string | null;
+  sourcePdf: string | null;
+  sourcePage: number | null;
+  sourceNote: string | null;
+  adjustmentNote: string | null;
+  previousValue: string | null;
+}
+
+export function getQuestionAnswerKeyInfo(q: QuestionRecord): QuestionAnswerKeyInfo {
+  const status = q.answerKey?.status || q.answerKeyStatus;
+  const isAnnulled = Boolean(
+    q.isAnnulled || status === 'annulled' || q.correctAnswer === 'ANULADA'
+  );
+
+  if (isAnnulled) {
+    return {
+      hasOfficialKey: true,
+      isAnnulled: true,
+      isPreliminary: false,
+      isAdjusted: false,
+      expectedChoiceValue: null,
+      shortAnswerLabel: 'ANULADA',
+      statusBadgeLabel: 'Anulada no gabarito oficial',
+      statusTone: 'annulled',
+      optionText: null,
+      sourcePdf: q.answerKey?.sourcePdf || null,
+      sourcePage: q.answerKey?.sourcePage || null,
+      sourceNote: q.answerKey?.sourceNote || null,
+      adjustmentNote: q.answerKey?.adjustmentNote || null,
+      previousValue: q.answerKey?.previousValue || null,
+    };
+  }
+
+  const isCebraspe =
+    q.questionType === 'true_false' || q.banca.toUpperCase().includes('CEBRASPE');
+
+  let expectedChoiceValue: string | null = null;
+  let shortAnswerLabel = '';
+
+  if (isCebraspe) {
+    const raw = (q.correctJudgment || q.correctAnswer || q.answerKey?.displayValue || q.answerKey?.value || '')
+      .trim()
+      .toUpperCase();
+    if (raw === 'CERTO' || raw === 'C') {
+      expectedChoiceValue = 'Certo';
+      shortAnswerLabel = 'CERTO';
+    } else if (raw === 'ERRADO' || raw === 'E') {
+      expectedChoiceValue = 'Errado';
+      shortAnswerLabel = 'ERRADO';
+    }
+  } else {
+    const raw = (q.correctOptionLabel || q.correctAnswer || q.answerKey?.value || '')
+      .trim()
+      .toUpperCase();
+    if (/^[A-E]$/.test(raw)) {
+      expectedChoiceValue = raw;
+      shortAnswerLabel = raw;
+    }
+  }
+
+  const isPreliminary = status === 'official_preliminary';
+  const isAdjusted = status === 'official_adjusted' || status === 'official_final_adjusted';
+
+  let statusBadgeLabel = 'Sem gabarito vinculado';
+  let statusTone: QuestionAnswerKeyInfo['statusTone'] = 'none';
+
+  if (status === 'official_preliminary') {
+    statusBadgeLabel = 'Gabarito oficial preliminar';
+    statusTone = 'preliminary';
+  } else if (status === 'official_final_adjusted') {
+    statusBadgeLabel = q.answerKey?.previousValue
+      ? `Definitivo (alterado de ${q.answerKey.previousValue} → ${shortAnswerLabel})`
+      : 'Definitivo (alterado após recursos)';
+    statusTone = 'adjusted';
+  } else if (status === 'official_adjusted') {
+    statusBadgeLabel = 'Alterado após recursos';
+    statusTone = 'adjusted';
+  } else if (status === 'official_final' || expectedChoiceValue) {
+    statusBadgeLabel = 'Gabarito oficial definitivo';
+    statusTone = 'final';
+  }
+
+  return {
+    hasOfficialKey: Boolean(expectedChoiceValue),
+    isAnnulled: false,
+    isPreliminary,
+    isAdjusted,
+    expectedChoiceValue,
+    shortAnswerLabel,
+    statusBadgeLabel,
+    statusTone,
+    optionText: q.correctOptionText || null,
+    sourcePdf: q.answerKey?.sourcePdf || null,
+    sourcePage: q.answerKey?.sourcePage || null,
+    sourceNote: q.answerKey?.sourceNote || null,
+    adjustmentNote: q.answerKey?.adjustmentNote || null,
+    previousValue: q.answerKey?.previousValue || null,
+  };
+}
+
+export function normalizeAnswerToken(value: string, isCebraspe: boolean): string {
+  const clean = value.trim().toUpperCase();
+  if (!clean) return '';
+  if (isCebraspe) {
+    if (clean === 'C' || clean === 'CERTO') return 'CERTO';
+    if (clean === 'E' || clean === 'ERRADO') return 'ERRADO';
+  }
+  return clean;
+}
+
+export function isAnswerMatchingGabarito(
+  minhaResposta: string,
+  gabarito: string,
+  question?: QuestionRecord
+): boolean {
+  if (question?.isAnnulled || gabarito.trim().toUpperCase() === 'ANULADA') {
+    return false;
+  }
+  const isCeb =
+    question?.questionType === 'true_false' ||
+    Boolean(question?.banca.toUpperCase().includes('CEBRASPE'));
+  const nMine = normalizeAnswerToken(minhaResposta, isCeb);
+  const nGab = normalizeAnswerToken(gabarito, isCeb);
+  return Boolean(nMine && nGab && nMine === nGab);
+}
+
 export function buildExamSummaries(questions: QuestionRecord[]): ExamSummary[] {
   const map = new Map<string, ExamSummary>();
   for (const q of questions) {
@@ -521,6 +1103,8 @@ export function filterQuestions(
         item.prova,
         item.banca,
         String(item.questao),
+        item.questionId || '',
+        item.appLookupKey || '',
         item.areaOriginal,
         item.tema,
         item.grupoEstudo,
@@ -529,6 +1113,10 @@ export function filterQuestions(
         item.exigencia,
         item.arquivoOrigem,
         item.topicoEditalUnificado,
+        item.contextText || '',
+        item.statementWithoutNumber || '',
+        item.correctOptionText || '',
+        item.correctAnswer || '',
       ]
         .join(' ')
         .toLowerCase();
@@ -1703,6 +2291,16 @@ export function analyzePastedTextTraps(rawText: string): TextTrapDetection[] {
 // Module 14: Painel de Desempenho Individual
 // ============================================================================
 
+export function filterOriginalBankScoringAttempts(
+  attempts: StudentAttemptRecord[]
+): StudentAttemptRecord[] {
+  return attempts.filter(
+    (att) =>
+      (att.source === 'original_bank' || att.id.startsWith('orig-')) &&
+      (att.status === 'acerto' || att.status === 'erro')
+  );
+}
+
 export function resolveEffectiveAttempts(
   questions: QuestionRecord[],
   performanceMap: Record<string, QuestionPerformance>,
@@ -2220,6 +2818,11 @@ export function generateCustomSimulado(
     }
     return true;
   });
+
+  const validPool = pool.filter((q) => !q.isAnnulled);
+  if (validPool.length > 0) {
+    pool = validPool;
+  }
 
   if (pool.length === 0) return [];
 

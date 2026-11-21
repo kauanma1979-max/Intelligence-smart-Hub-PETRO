@@ -1,11 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { FileText, RotateCcw, Search } from 'lucide-react';
+import { Eye, EyeOff, FileText, RotateCcw, Search } from 'lucide-react';
 import type {
   LocatorFilters,
   QuestionPerformance,
   QuestionRecord,
 } from '../types/exam';
-import { filterQuestions } from '../utils/examIntelligence';
+import {
+  filterQuestions,
+  getQuestionAnswerKeyInfo,
+} from '../utils/examIntelligence';
 
 interface SmartLocatorViewProps {
   questions: QuestionRecord[];
@@ -33,6 +36,7 @@ export const SmartLocatorView: React.FC<SmartLocatorViewProps> = ({
   onSelectQuestion,
 }) => {
   const [filters, setFilters] = useState<LocatorFilters>(INITIAL_FILTERS);
+  const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({});
 
   const options = useMemo(() => {
     const uniq = (arr: string[]) => Array.from(new Set(arr)).filter(Boolean).sort();
@@ -332,6 +336,7 @@ export const SmartLocatorView: React.FC<SmartLocatorViewProps> = ({
         <div className="ui-card divide-y divide-[var(--border-subtle)] overflow-hidden">
           {matches.map((q) => {
             const perf = performanceMap[q.id]?.status || 'pendente';
+            const akInfo = getQuestionAnswerKeyInfo(q);
             return (
               <article
                 key={q.id}
@@ -359,6 +364,52 @@ export const SmartLocatorView: React.FC<SmartLocatorViewProps> = ({
                       >
                         Vínculo {q.vinculo}
                       </span>
+                      {akInfo.hasOfficialKey && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setRevealedIds((prev) => ({
+                                ...prev,
+                                [q.id]: !prev[q.id],
+                              }))
+                            }
+                            title={
+                              revealedIds[q.id]
+                                ? akInfo.statusBadgeLabel
+                                : 'Exibir gabarito'
+                            }
+                            aria-label={
+                              revealedIds[q.id]
+                                ? `Ocultar gabarito da questão ${q.questao}`
+                                : `Exibir gabarito da questão ${q.questao}`
+                            }
+                            className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold transition-colors ${
+                              revealedIds[q.id]
+                                ? akInfo.isAnnulled
+                                  ? 'bg-[var(--status-error-bg)] text-[var(--status-error)]'
+                                  : akInfo.isPreliminary
+                                    ? 'bg-[var(--status-warning-bg)] text-[var(--status-warning)]'
+                                    : 'bg-[var(--status-success-bg)] text-[var(--status-success)]'
+                                : 'border border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary-ink)]'
+                            }`}
+                          >
+                            {revealedIds[q.id] ? (
+                              <>
+                                <EyeOff className="h-3 w-3" />
+                                <span>
+                                  {akInfo.isAnnulled
+                                    ? 'ANULADA'
+                                    : `Gab: ${akInfo.shortAnswerLabel}${akInfo.isPreliminary ? ' (Preliminar)' : ''}`}
+                                </span>
+                              </>
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        </>
+                      )}
                       {perf !== 'pendente' && (
                         <>
                           <span aria-hidden="true">·</span>
@@ -389,6 +440,12 @@ export const SmartLocatorView: React.FC<SmartLocatorViewProps> = ({
                       <span className="font-medium text-[var(--text-muted)]">Exigência: </span>
                       {q.exigencia}
                     </p>
+
+                    {q.statementWithoutNumber && (
+                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--text-muted)]">
+                        {q.statementWithoutNumber.replace(/\s+/g, ' ').trim()}
+                      </p>
+                    )}
 
                     <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--text-muted)]">
                       <span>

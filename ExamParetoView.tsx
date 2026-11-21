@@ -42,12 +42,22 @@ export const ExamParetoView: React.FC<ExamParetoViewProps> = ({
   // Matrix of % weight across all exams for comparison
   const allGroups = useMemo(() => globalPareto.map((g) => g.grupo), [globalPareto]);
   const perExamMatrix = useMemo(() => {
-    const map = new Map<string, Map<string, { count: number; pct: number }>>();
+    const map = new Map<
+      string,
+      Map<string, { count: number; pct: number; questoes: QuestionRecord[] }>
+    >();
     for (const ex of exams) {
       const p = calculatePareto(questions, ex.prova);
-      const inner = new Map<string, { count: number; pct: number }>();
+      const inner = new Map<
+        string,
+        { count: number; pct: number; questoes: QuestionRecord[] }
+      >();
       for (const row of p) {
-        inner.set(row.grupo, { count: row.frequencia, pct: row.percentual });
+        inner.set(row.grupo, {
+          count: row.frequencia,
+          pct: row.percentual,
+          questoes: row.questoes,
+        });
       }
       map.set(ex.prova, inner);
     }
@@ -211,7 +221,19 @@ export const ExamParetoView: React.FC<ExamParetoViewProps> = ({
                 return (
                   <tr key={row.grupo} className="transition-colors hover:bg-[var(--bg-surface-hover)]">
                     <td className="px-4 py-3 font-medium text-[var(--text-primary)]">
-                      {row.grupo}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onInspectQuestions(
+                            `${examSummary?.concursoCurto}: ${row.grupo}`,
+                            `${row.frequencia} questões (${row.percentual.toFixed(1)}% desta prova)`,
+                            row.questoes
+                          )
+                        }
+                        className="text-left font-medium hover:text-[var(--brand-primary)] hover:underline"
+                      >
+                        {row.grupo}
+                      </button>
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       <span
@@ -299,7 +321,24 @@ export const ExamParetoView: React.FC<ExamParetoViewProps> = ({
             <tbody className="divide-y divide-[var(--border-subtle)]">
               {allGroups.map((grupo) => (
                 <tr key={grupo} className="transition-colors hover:bg-[var(--bg-surface-hover)]">
-                  <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{grupo}</td>
+                  <td className="px-4 py-3 font-medium text-[var(--text-primary)]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const groupRow = globalPareto.find((g) => g.grupo === grupo);
+                        if (groupRow) {
+                          onInspectQuestions(
+                            `Grupo: ${grupo}`,
+                            `${groupRow.frequencia} questões em todas as provas`,
+                            groupRow.questoes
+                          );
+                        }
+                      }}
+                      className="text-left font-medium hover:text-[var(--brand-primary)] hover:underline"
+                    >
+                      {grupo}
+                    </button>
+                  </td>
                   {exams.map((ex) => {
                     const cell = perExamMatrix.get(ex.prova)?.get(grupo);
                     return (
@@ -307,15 +346,25 @@ export const ExamParetoView: React.FC<ExamParetoViewProps> = ({
                         key={`${grupo}-${ex.prova}`}
                         className="px-3 py-3 text-right font-mono text-[var(--text-secondary)] tabular-nums whitespace-nowrap"
                       >
-                        {cell ? (
-                          <span>
+                        {cell && cell.count > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onInspectQuestions(
+                                `${grupo} — ${ex.concursoCurto}`,
+                                `${cell.count} questão(ões) (${cell.pct.toFixed(1)}% da prova)`,
+                                cell.questoes
+                              )
+                            }
+                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-[var(--brand-primary-soft)] hover:underline"
+                          >
                             <span className="font-semibold text-[var(--text-primary)]">
                               {cell.pct.toFixed(1)}%
-                            </span>{' '}
+                            </span>
                             <span className="text-xs text-[var(--text-muted)]">
                               ({cell.count})
                             </span>
-                          </span>
+                          </button>
                         ) : (
                           <span className="text-slate-400">0.0% (0)</span>
                         )}

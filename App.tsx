@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   CheckSquare,
   Download,
+  FileCheck2,
   GitCompare,
   Grid3x3,
   Layers,
@@ -26,10 +27,15 @@ import {
 } from 'lucide-react';
 import type {
   NewExamPayload,
+  OriginalBankFilters,
   QuestionEngineeringStudy,
   QuestionPerformance,
   QuestionRecord,
+  RawQuestionBankPayload,
+  RawQuestionCorrelationPayload,
   ReasoningType,
+  SpecificExamMetadata,
+  SpecificQuestionsPayload,
   StudentAttemptRecord,
 } from './types/exam';
 import {
@@ -38,9 +44,12 @@ import {
   calculatePareto,
   createBackupPayload,
   createRecordsFromNewExam,
+  enrichDatabaseWithAnswerBank,
+  mergeSpecificQuestionsDatabase,
   parseAndReconcileBackup,
 } from './utils/examIntelligence';
 import { OverviewParetoView } from './components/OverviewParetoView';
+import { OriginalQuestionsBankView } from './components/OriginalQuestionsBankView';
 import { SmartLocatorView } from './components/SmartLocatorView';
 import { SyllabusIncidenceView } from './components/SyllabusIncidenceView';
 import { TopicRankingView } from './components/TopicRankingView';
@@ -60,6 +69,7 @@ import { AddExamModal } from './components/AddExamModal';
 
 type NavTabId =
   | 'pareto'
+  | 'original-bank'
   | 'locator'
   | 'syllabus'
   | 'ranking'
@@ -91,6 +101,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Exploração e Pareto',
     items: [
       { id: 'pareto', label: 'Pareto 80/20 Geral', icon: PieChart },
+      { id: 'original-bank', label: 'Banco de Questões — Provas Originais', icon: FileCheck2 },
       { id: 'locator', label: 'Localizador de Questões', icon: Search },
       { id: 'syllabus', label: 'Mapa do Edital', icon: BookOpen },
       { id: 'ranking', label: 'Ranking de Assuntos', icon: BarChart3 },
@@ -150,6 +161,11 @@ export default function App() {
   });
 
   const [baseQuestions, setBaseQuestions] = useState<QuestionRecord[]>([]);
+  const [provasMeta, setProvasMeta] = useState<SpecificExamMetadata[]>([]);
+  const [originalBankTarget, setOriginalBankTarget] = useState<{
+    questionKey?: string | null;
+    filters?: Partial<OriginalBankFilters> | null;
+  } | null>(null);
   const [customQuestions, setCustomQuestions] = useState<QuestionRecord[]>(() => {
     try {
       const raw = localStorage.getItem(LS_CUSTOM_EXAMS);
@@ -240,9 +256,20 @@ export default function App() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [paretoRes, principalRes] = await Promise.all([
+      const [
+        paretoRes,
+        principalRes,
+        bankRes,
+        correlacaoRes,
+        specificRes,
+        provasRes,
+      ] = await Promise.all([
         fetch('/assets/aistudio/Base_Questoes_Pareto_0ab26850.csv'),
         fetch('/assets/aistudio/Questoes_270_base_principal_8e6a3811.csv'),
+        fetch('/assets/aistudio/banco_questoes_operacao_dutos_app_63a3f59b.json'),
+        fetch('/assets/aistudio/correlacao_questoes_app_53d7bc78.json'),
+        fetch('/data/questoes_especificas.min.json'),
+        fetch('/data/provas.json'),
       ]);
 
       if (!paretoRes.ok || !principalRes.ok) {
@@ -255,7 +282,25 @@ export default function App() {
       ]);
 
       const unified = buildUnifiedDatabase(paretoText, principalText);
-      setBaseQuestions(unified);
+
+      // Import in recommended order: 1) banco_questoes_operacao_dutos_app.json, 2) correlacao_questoes_app.json
+      const bankJson = bankRes.ok
+        ? ((await bankRes.json()) as RawQuestionBankPayload)
+        : null;
+      const correlacaoJson = correlacaoRes.ok
+        ? ((await correlacaoRes.json()) as RawQuestionCorrelationPayload)
+        : null;
+      const specificJson = specificRes.ok
+        ? ((await specificRes.json()) as SpecificQuestionsPayload)
+        : null;
+      const provasJson = provasRes.ok
+        ? ((await provasRes.json()) as SpecificExamMetadata[])
+        : specificJson?.exams ?? [];
+
+      const enriched = enrichDatabaseWithAnswerBank(unified, bankJson, correlacaoJson);
+      const merged = mergeSpecificQuestionsDatabase(enriched, specificJson, provasJson);
+      setProvasMeta(provasJson);
+      setBaseQuestions(merged);
     } catch (err) {
       setLoadError(
         err instanceof Error
@@ -473,6 +518,11 @@ export default function App() {
       });
       return remaining;
     });
+  };
+
+  const handleResetAllPerformance = () => {
+    setStudentAttempts([]);
+    setPerformanceMap({});
   };
 
   const handleSaveNewExam = (payload: NewExamPayload) => {
@@ -846,6 +896,20 @@ export default function App() {
                 />
               )}
 
+              {activeTab === 'original-bank' && (
+                <OriginalQuestionsBankView
+                  questions={allQuestions}
+                  provasMeta={provasMeta}
+                  performanceMap={performanceMap}
+                  attempts={studentAttempts}
+                  onUpdatePerformance={handleUpdatePerformance}
+                  onAddAttempt={handleAddAttempt}
+                  initialQuestionKey={originalBankTarget?.questionKey ?? null}
+                  initialFilters={originalBankTarget?.filters ?? null}
+                  onConsumeInitialSelection={() => setOriginalBankTarget(null)}
+                />
+              )}
+
               {activeTab === 'locator' && (
                 <SmartLocatorView
                   questions={allQuestions}
@@ -951,6 +1015,8 @@ export default function App() {
                   attempts={studentAttempts}
                   onAddAttempt={handleAddAttempt}
                   onDeleteAttempt={handleDeleteAttempt}
+                  onResetAllPerformance={handleResetAllPerformance}
+                  onOpenOriginalBank={() => setActiveTab('original-bank')}
                   onSelectQuestion={handleSelectQuestion}
                   onInspectQuestions={handleInspectQuestions}
                 />
@@ -996,6 +1062,13 @@ export default function App() {
         onUpdatePerformance={handleUpdatePerformance}
         attachedPdfs={attachedPdfs}
         onAttachPdf={handleAttachPdf}
+        onOpenInOriginalBank={(q) => {
+          setOriginalBankTarget({
+            questionKey: q.questionId || q.appLookupKey || q.id,
+            filters: null,
+          });
+          setActiveTab('original-bank');
+        }}
       />
 
       {/* Add Exam & Recalculate Pareto Modal */}

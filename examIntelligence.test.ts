@@ -8,6 +8,7 @@ import {
   buildBoardComparison,
   buildCommonAndExclusiveMatrix,
   buildDistractorRadar,
+  buildExamCountValidation,
   buildExamSummaries,
   buildHistoricalEvolution,
   buildKnowledgeAtlasTree,
@@ -23,11 +24,25 @@ import {
   calculateRanking,
   createBackupPayload,
   createRecordsFromNewExam,
+  enrichDatabaseWithAnswerBank,
+  filterOriginalBankQuestions,
+  filterOriginalBankScoringAttempts,
   filterQuestions,
   generateCustomSimulado,
+  getQuestionAnswerKeyInfo,
+  isAnswerMatchingGabarito,
+  mergeSpecificQuestionsDatabase,
   parseAndReconcileBackup,
+  resolveQuestionByKey,
 } from './examIntelligence';
-import type { LocatorFilters, StudentAttemptRecord } from '../types/exam';
+import type {
+  LocatorFilters,
+  RawQuestionBankPayload,
+  RawQuestionCorrelationPayload,
+  SpecificExamMetadata,
+  SpecificQuestionsPayload,
+  StudentAttemptRecord,
+} from '../types/exam';
 
 const paretoCsv = fs.readFileSync(
   path.resolve('public/assets/aistudio/Base_Questoes_Pareto_0ab26850.csv'),
@@ -37,6 +52,30 @@ const principalCsv = fs.readFileSync(
   path.resolve('public/assets/aistudio/Questoes_270_base_principal_8e6a3811.csv'),
   'utf-8'
 );
+const bankJson = JSON.parse(
+  fs.readFileSync(
+    path.resolve('public/assets/aistudio/banco_questoes_operacao_dutos_app_63a3f59b.json'),
+    'utf-8'
+  )
+) as RawQuestionBankPayload;
+const correlacaoJson = JSON.parse(
+  fs.readFileSync(
+    path.resolve('public/assets/aistudio/correlacao_questoes_app_53d7bc78.json'),
+    'utf-8'
+  )
+) as RawQuestionCorrelationPayload;
+const specificJson = JSON.parse(
+  fs.readFileSync(
+    path.resolve('public/data/questoes_especificas.min.json'),
+    'utf-8'
+  )
+) as SpecificQuestionsPayload;
+const provasJson = JSON.parse(
+  fs.readFileSync(
+    path.resolve('public/data/provas.json'),
+    'utf-8'
+  )
+) as SpecificExamMetadata[];
 
 const DEFAULT_FILTERS: LocatorFilters = {
   query: '',
@@ -576,4 +615,361 @@ test('buildTopicExamHeatmap builds chronological exam columns and topic rows wit
   assert.equal(emptyHeatmap.exams.length, 0);
   assert.equal(emptyHeatmap.maxCellCount, 0);
 });
+
+test('enrichDatabaseWithAnswerBank preserves all CSV correlations while integrating 270 answer keys, statements, and caveats', () => {
+  const base = buildUnifiedDatabase(paretoCsv, principalCsv);
+  const enriched = enrichDatabaseWithAnswerBank(base, bankJson, correlacaoJson);
+
+  assert.equal(enriched.length, 270);
+
+  // Preserve original Pareto distribution & IDs identically
+  const basePareto = calculatePareto(base).map((r) => [r.grupo, r.frequencia]);
+  const enrichedPareto = calculatePareto(enriched).map((r) => [r.grupo, r.frequencia]);
+  assert.deepEqual(enrichedPareto, basePareto);
+
+  for (let i = 0; i < base.length; i++) {
+    assert.equal(enriched[i].id, base[i].id);
+    assert.equal(enriched[i].grupoEstudo, base[i].grupoEstudo);
+    assert.equal(enriched[i].codigoPrograma, base[i].codigoPrograma);
+    assert.equal(enriched[i].vinculo, base[i].vinculo);
+    assert.equal(enriched[i].tema, base[i].tema);
+    assert.ok(enriched[i].questionId, `Missing questionId on ${enriched[i].id}`);
+    assert.ok(enriched[i].appLookupKey, `Missing appLookupKey on ${enriched[i].id}`);
+  }
+
+  // Exactly 265 valid answer keys + 5 annulled items
+  const annulled = enriched.filter((q) => q.isAnnulled);
+  const valid = enriched.filter((q) => !q.isAnnulled);
+  assert.equal(annulled.length, 5);
+  assert.equal(valid.length, 265);
+  for (const aq of annulled) {
+    assert.equal(aq.correctAnswer, 'ANULADA');
+    assert.equal(aq.correctOptionLabel, null);
+    assert.equal(aq.correctJudgment, null);
+    assert.equal(getQuestionAnswerKeyInfo(aq).expectedChoiceValue, null);
+  }
+
+  // Preliminary keys remain marked preliminary (never promoted to definitive)
+  const pet231 = enriched.filter((q) => q.examId === 'PETROBRAS_2023_1_OPERACAO');
+  const ansa26 = enriched.filter((q) => q.examId === 'ANSA_2026_OPERACAO');
+  assert.ok(pet231.every((q) => q.answerKeyStatus === 'official_preliminary'));
+  assert.ok(ansa26.every((q) => q.answerKeyStatus === 'official_preliminary'));
+
+  // Special check: Transpetro 2018 Q49 (PDF image alternatives transcribed, D = 0,75)
+  const t18q49 = enriched.find((q) => q.questionId === 'TRANSPETRO_2018_OPERACAO_Q049');
+  assert.ok(t18q49);
+  assert.equal(t18q49.correctOptionLabel, 'D');
+  assert.equal(t18q49.alternatives?.find((a) => a.label === 'D')?.text, '0,75');
+
+  // Special check: Transpetro 2023.1 Q49 adjusted C -> E
+  const t23q49 = enriched.find(
+    (q) => q.questionId === 'TRANSPETRO_2023_1_DUTOS_TERMINAIS_Q049'
+  );
+  assert.ok(t23q49);
+  assert.equal(t23q49.correctOptionLabel, 'E');
+  assert.equal(t23q49.answerKey?.previousValue, 'C');
+
+  // Special check: Transpetro 2023.1 Q25 page correction (9 -> 8)
+  const t23q25 = enriched.find(
+    (q) => q.questionId === 'TRANSPETRO_2023_1_DUTOS_TERMINAIS_Q025'
+  );
+  assert.ok(t23q25);
+  assert.equal(t23q25.paginaPdf, 8);
+  assert.equal(t23q25.pdfPageCorrected, true);
+  assert.equal(t23q25.paginaPdfOriginalCsv, 9);
+
+  // CEBRASPE answer matching normalizes 'Certo' / 'CERTO' / 'C'
+  const cebQ = pet231[0];
+  assert.equal(isAnswerMatchingGabarito('Certo', 'CERTO', cebQ), true);
+  assert.equal(isAnswerMatchingGabarito('Errado', 'CERTO', cebQ), false);
+
+  // Simulado skips annulled items when non-annulled candidates are available
+  const sim = generateCustomSimulado(enriched, {
+    banca: 'Todas',
+    prova: 'Petrobras 2023.2',
+    grupo: 'Todas',
+    dificuldade: 'todas',
+    quantidade: 60,
+    modo: 'equilibrado',
+  });
+  assert.ok(sim.every((q) => !q.isAnnulled));
+});
+
+test('mergeSpecificQuestionsDatabase integrates 270 specific questions, WebP images, reduced PDFs, and key-only lookups without basic subjects', () => {
+  const base = buildUnifiedDatabase(paretoCsv, principalCsv);
+  const enriched = enrichDatabaseWithAnswerBank(base, bankJson, correlacaoJson);
+  const merged = mergeSpecificQuestionsDatabase(enriched, specificJson, provasJson);
+
+  assert.equal(merged.length, 270);
+
+  // Unique question_id and app_lookup_key
+  const qIds = new Set(merged.map((q) => q.questionId));
+  const lookupKeys = new Set(merged.map((q) => q.appLookupKey));
+  assert.equal(qIds.size, 270);
+  assert.equal(lookupKeys.size, 270);
+
+  // Exact exam count validation (40 + 60 + 60 + 40 + 70 = 270) and basic subjects excluded
+  const validation = buildExamCountValidation(provasJson, merged);
+  assert.equal(validation.isComplete270, true);
+  assert.equal(validation.allBasicExcluded, true);
+  assert.equal(validation.totalActual, 270);
+  assert.deepEqual(
+    validation.exams.map((e) => [e.examId, e.actualCount]),
+    [
+      ['TRANSPETRO_2018_OPERACAO', 40],
+      ['PETROBRAS_2023_1_OPERACAO', 60],
+      ['PETROBRAS_2023_2_OPERACAO', 60],
+      ['TRANSPETRO_2023_1_DUTOS_TERMINAIS', 40],
+      ['ANSA_2026_OPERACAO', 70],
+    ]
+  );
+
+  // Every referenced WebP image and reduced PDF exists in public/
+  for (const q of merged) {
+    assert.ok(q.originalImagePath, `Missing originalImagePath on ${q.appLookupKey}`);
+    assert.ok(q.specificPdfPath, `Missing specificPdfPath on ${q.appLookupKey}`);
+    assert.ok(
+      typeof q.specificPdfPage === 'number' && q.specificPdfPage >= 1,
+      `Missing specificPdfPage on ${q.appLookupKey}`
+    );
+    const imgOnDisk = path.resolve('public', q.originalImagePath.replace(/^\//, ''));
+    const pdfOnDisk = path.resolve('public', q.specificPdfPath.replace(/^\//, ''));
+    assert.ok(fs.existsSync(imgOnDisk), `WebP missing on disk: ${imgOnDisk}`);
+    assert.ok(fs.existsSync(pdfOnDisk), `Specific PDF missing on disk: ${pdfOnDisk}`);
+  }
+
+  // Spot checks required by PROMPT_GOOGLE_AI_STUDIO.md
+  const t18q21 = resolveQuestionByKey(merged, 'TRANSPETRO_2018_OPERACAO:21');
+  assert.ok(t18q21);
+  assert.equal(t18q21.specificPdfPage, 1);
+  assert.equal(t18q21.sourcePdfPageOriginal, 6);
+  assert.equal(t18q21.correctOptionLabel, 'C');
+
+  const pet231q41 = resolveQuestionByKey(merged, 'PETROBRAS_2023_1_OPERACAO_Q041');
+  assert.ok(pet231q41);
+  assert.ok((pet231q41.contextTextNormalized || '').includes('Asfaltenos'));
+  assert.equal(pet231q41.showContextFirst, true);
+  assert.equal(pet231q41.answerKeyStatus, 'official_preliminary');
+
+  const tp23q21 = resolveQuestionByKey(merged, 'TRANSPETRO_2023_1_DUTOS_TERMINAIS:21');
+  assert.ok(tp23q21);
+  assert.ok(tp23q21.referenceMaterialPath?.endsWith('tabela_periodica_apoio.pdf'));
+  assert.equal(tp23q21.alternatives?.length, 5);
+
+  const ansa100 = resolveQuestionByKey(merged, 'ANSA_2026_OPERACAO:100');
+  assert.ok(ansa100);
+  assert.equal(ansa100.specificPdfPage, 5);
+  assert.equal(ansa100.correctJudgment, 'ERRADO');
+  assert.equal(ansa100.answerKeyStatus, 'official_preliminary');
+
+  // Filtering by questaoNumero 41 without exam filter returns all distinct exams having Q41
+  const q41Matches = filterOriginalBankQuestions(merged, {
+    query: '',
+    empresa: 'Todas',
+    prova: 'Todas',
+    ano: 'Todos',
+    banca: 'Todas',
+    enfase: 'Todas',
+    grupo: 'Todas',
+    area: 'Todas',
+    tema: 'Todas',
+    questaoNumero: '41',
+  });
+  assert.equal(q41Matches.length, 5);
+  assert.equal(new Set(q41Matches.map((q) => q.appLookupKey)).size, 5);
+});
+
+test('Desempenho Individual counts exclusively original_bank acertos/erros and clears to zero when reset', () => {
+  const base = buildUnifiedDatabase(paretoCsv, principalCsv);
+  const q1 = base[0];
+  const q2 = base[1];
+  const q3 = base[2];
+
+  const mixedAttempts: StudentAttemptRecord[] = [
+    {
+      id: 'orig-1',
+      questionId: q1.id,
+      minhaResposta: 'C',
+      gabarito: 'C',
+      status: 'acerto',
+      source: 'original_bank',
+      confianca: 'alta',
+      dificuldade: 'media',
+      revisaoNecessaria: false,
+      answeredAt: '2026-11-20T10:00:00Z',
+    },
+    {
+      id: 'orig-2',
+      questionId: q2.id,
+      minhaResposta: 'A',
+      gabarito: 'D',
+      status: 'erro',
+      source: 'original_bank',
+      confianca: 'media',
+      dificuldade: 'media',
+      revisaoNecessaria: true,
+      answeredAt: '2026-11-20T10:05:00Z',
+    },
+    {
+      id: 'orig-revisar',
+      questionId: q3.id,
+      minhaResposta: 'B',
+      gabarito: 'B',
+      status: 'revisar',
+      source: 'original_bank',
+      confianca: 'baixa',
+      dificuldade: 'dificil',
+      revisaoNecessaria: true,
+      answeredAt: '2026-11-20T10:10:00Z',
+    },
+    {
+      id: 'att-manual-1',
+      questionId: q3.id,
+      minhaResposta: 'A',
+      gabarito: 'A',
+      status: 'acerto',
+      source: 'manual',
+      confianca: 'alta',
+      dificuldade: 'facil',
+      revisaoNecessaria: false,
+      answeredAt: '2026-11-20T10:15:00Z',
+    },
+    {
+      id: 'sim-1',
+      questionId: q3.id,
+      minhaResposta: 'B',
+      gabarito: 'A',
+      status: 'erro',
+      source: 'simulado',
+      confianca: 'media',
+      dificuldade: 'media',
+      revisaoNecessaria: true,
+      answeredAt: '2026-11-20T10:20:00Z',
+    },
+  ];
+
+  const scoped = filterOriginalBankScoringAttempts(mixedAttempts);
+  assert.deepEqual(
+    scoped.map((a) => a.id),
+    ['orig-1', 'orig-2']
+  );
+
+  // Even when performanceMap has other drawer flags, passing {} ensures only Banco de Questões counts
+  const summary = buildStudentPerformanceSummary(base, {}, scoped);
+  assert.equal(summary.totalTentativas, 2);
+  assert.equal(summary.totalAcertos, 1);
+  assert.equal(summary.totalErros, 1);
+  assert.equal(summary.totalRevisar, 0);
+  assert.equal(summary.taxaAcertoGeral, 50);
+
+  // Resetting all records yields a clean zero summary
+  const emptySummary = buildStudentPerformanceSummary(
+    base,
+    {},
+    filterOriginalBankScoringAttempts([])
+  );
+  assert.equal(emptySummary.totalTentativas, 0);
+  assert.equal(emptySummary.totalAcertos, 0);
+  assert.equal(emptySummary.totalErros, 0);
+  assert.equal(emptySummary.taxaAcertoGeral, 0);
+});
+
+test('Full 270-question database audit: zero PUA/control glyphs, clean equations, complete 5 alternatives, and no trailing CEBRASPE context leaks', () => {
+  const specificJson = JSON.parse(
+    fs.readFileSync(path.resolve('public/data/questoes_especificas.min.json'), 'utf8')
+  );
+  const provasJson = JSON.parse(
+    fs.readFileSync(path.resolve('public/data/provas.json'), 'utf8')
+  );
+  const merged = mergeSpecificQuestionsDatabase(
+    buildUnifiedDatabase(paretoCsv, principalCsv),
+    specificJson,
+    provasJson
+  );
+
+  const specificQuestions = merged.filter((q) => Boolean(q.appLookupKey));
+  assert.equal(specificQuestions.length, 270);
+
+  const badCharRe = /[\uE000-\uF8FF\uFFFD\uFB00-\uFB06\x00-\x08\x0B\x0C\x0E-\x1F]/;
+
+  for (const q of specificQuestions) {
+    const joined = [
+      q.contextText,
+      q.contextTextNormalized,
+      q.questionText,
+      q.questionTextNormalized,
+      q.statementWithoutNumber,
+      q.correctOptionText,
+      ...(q.alternatives || []).map((a) => a.text),
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    assert.equal(
+      badCharRe.test(joined),
+      false,
+      `PUA or control character found in ${q.questionId}`
+    );
+
+    if (q.questionType === 'multiple_choice') {
+      assert.equal(
+        q.alternatives?.length,
+        5,
+        `Expected 5 alternatives on ${q.questionId}`
+      );
+      for (const alt of q.alternatives || []) {
+        assert.ok(alt.text.trim().length > 0, `Empty alt on ${q.questionId}`);
+        assert.equal(
+          /\bDado\b|\bTERRA\b/i.test(alt.text),
+          false,
+          `Dado/TERRA leak in alternative ${alt.label} of ${q.questionId}`
+        );
+      }
+      assert.equal(
+        /\n\(A\)/.test(q.statementWithoutNumber || ''),
+        false,
+        `Duplicated (A) option list in statementWithoutNumber of ${q.questionId}`
+      );
+    } else {
+      assert.equal(
+        /julgue/i.test(q.statementWithoutNumber || ''),
+        false,
+        `Trailing next-block context leaked into ${q.questionId}`
+      );
+    }
+  }
+
+  // Regression spot checks for previously broken questions
+  const t18q25 = resolveQuestionByKey(merged, 'TRANSPETRO_2018_OPERACAO_Q025');
+  assert.ok(t18q25);
+  assert.equal(t18q25.alternatives?.length, 5);
+  assert.ok((t18q25.alternatives?.[1]?.text || '').includes('μ₀I / (2πL)'));
+  assert.equal(t18q25.alternatives?.[4]?.text, 'B₀ î');
+
+  const t18q47 = resolveQuestionByKey(merged, 'TRANSPETRO_2018_OPERACAO_Q047');
+  assert.ok(t18q47);
+  assert.equal(t18q47.alternatives?.find((a) => a.label === 'A')?.text, '575');
+  assert.equal(t18q47.alternatives?.find((a) => a.label === 'B')?.text, '863');
+
+  const t18q60 = resolveQuestionByKey(merged, 'TRANSPETRO_2018_OPERACAO_Q060');
+  assert.ok(t18q60);
+  assert.ok((t18q60.statementWithoutNumber || '').includes('ΔH = variação de entalpia'));
+  assert.equal(t18q60.correctOptionText, 'ΔH < 0, ΔS > 0 e ΔG < 0');
+
+  const pet231q53 = resolveQuestionByKey(merged, 'PETROBRAS_2023_1_OPERACAO_Q053');
+  assert.ok(pet231q53);
+  assert.ok((pet231q53.statementWithoutNumber || '').includes('K₂ = K₁⁻²'));
+
+  const ansa42 = resolveQuestionByKey(merged, 'ANSA_2026_OPERACAO_Q042');
+  assert.ok(ansa42);
+  assert.ok((ansa42.statementWithoutNumber || '').includes('q₁/q₂ = r₁/r₂'));
+
+  const ansa43 = resolveQuestionByKey(merged, 'ANSA_2026_OPERACAO_Q043');
+  assert.ok(ansa43);
+  assert.ok((ansa43.statementWithoutNumber || '').includes("v = [(2kq²/m)(1/d' − 1/d)]^(1/2)"));
+});
+
+
+
+
 
